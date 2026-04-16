@@ -1184,6 +1184,7 @@
       style="width:145px;font-size:12px;font-weight:500">
     <button class="btn btn-ghost btn-sm" onclick="limparFiltroData()" title="Ver todos" style="color:var(--text3);font-size:11px">✕</button>
     <button class="btn btn-ghost btn-sm" onclick="exportCSV('programados')">Exportar CSV</button>
+      <button class="btn btn-ghost btn-sm" onclick="imprimirProgramados()">🖨️ Imprimir</button>
     <div style="margin-left:auto">
       <button class="btn btn-success btn-sm" id="btn-email" onclick="enviarEmail()" style="display:flex;align-items:center;gap:7px;font-weight:600;padding:6px 16px">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
@@ -3219,7 +3220,7 @@ function responderAlerta() {
 function confirmarAlerta() {
   // Send OK confirmation back to planning
   const msg = '✅ OK — Alerta recebido e confirmado.';
-  if (typeof sheetsPost === 'function') sheetsPost('alerta', { de: 'plataforma', mensagem: msg });
+  enviarAlertaViaGet('plataforma', msg);
   showToast('Confirmação enviada ao Planejamento!', 'success');
   fecharPlatAlert();
 }
@@ -3227,12 +3228,11 @@ function enviarResposta() {
   const inp = document.getElementById('plat-resposta-input');
   const msg = inp?.value?.trim();
   if (!msg) return;
-  if (typeof sheetsPost === 'function') sheetsPost('alerta', { de: 'plataforma', mensagem: msg });
+  enviarAlertaViaGet('plataforma', '↩ Resposta: ' + msg);
   inp.value = '';
   document.getElementById('plat-resposta-box').style.display = 'none';
   showToast('Resposta enviada ao Planejamento!', 'success');
   fecharPlatAlert();
-  // Show immediately in planning panel
   addMsgPlataforma('↩ Resposta: ' + msg, new Date().toLocaleString('pt-BR'));
 }
 function fecharPlatAlert() {
@@ -3372,13 +3372,37 @@ function ativarAudio() {
 document.addEventListener('click', ativarAudio, { once: false });
 document.addEventListener('touchstart', ativarAudio, { once: false });
 
+
+// ===== ENVIAR ALERTA VIA GET (JSONP - funciona em todos os protocolos) =====
+function enviarAlertaViaGet(de, mensagem) {
+  if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
+  var cbName = 'saveCb_' + Date.now();
+  var timeout = setTimeout(function() { delete window[cbName]; }, 10000);
+  window[cbName] = function(json) {
+    clearTimeout(timeout);
+    delete window[cbName];
+    if (json && json.status === 'ok') {
+      console.log('Alerta salvo:', de, mensagem);
+    }
+  };
+  var url = APPS_SCRIPT_URL +
+    '?action=salvarAlerta' +
+    '&de=' + encodeURIComponent(de) +
+    '&msg=' + encodeURIComponent(mensagem) +
+    '&callback=' + cbName +
+    '&t=' + Date.now();
+  var script = document.createElement('script');
+  script.src = url;
+  script.onerror = function() { clearTimeout(timeout); delete window[cbName]; };
+  document.head.appendChild(script);
+}
+
 function platEnviarMsg() {
   const msg = document.getElementById('plat-msg-input')?.value?.trim();
   if (!msg) return;
-  if (typeof sheetsPost === 'function') sheetsPost('alerta', { de: 'plataforma', mensagem: msg });
+  enviarAlertaViaGet('plataforma', msg);
   document.getElementById('plat-msg-input').value = '';
   showToast('Mensagem enviada ao Planejamento!', 'success');
-  // Show immediately in planning panel (same device)
   addMsgPlataforma(msg, new Date().toLocaleString('pt-BR'));
 }
 
@@ -3393,15 +3417,11 @@ function fecharAlertPanel() {
 function enviarAlertaPlataforma() {
   const msg = document.getElementById('plan-alert-input')?.value?.trim();
   if (!msg) { showToast('Digite uma mensagem', 'error'); return; }
-  if (typeof sheetsPost === 'function') sheetsPost('alerta', { de: 'planejamento', mensagem: msg });
+  // Send via JSONP GET (guaranteed to work on all protocols)
+  enviarAlertaViaGet('planejamento', msg);
   document.getElementById('plan-alert-input').value = '';
   fecharAlertPanel();
   showToast('✅ Alerta enviado para a Plataforma!', 'success');
-  // Also show locally so the sender can preview it
-  // (and so it works even without Sheets, e.g. for the same device)
-  const ts = new Date().toLocaleString('pt-BR');
-  platLastAlertId = null; // reset so it shows again
-  showPlatAlert(msg, ts);
 }
 document.addEventListener('click', e => {
   const p = document.getElementById('plan-alert-panel');
@@ -3410,8 +3430,12 @@ document.addEventListener('click', e => {
 
 // Poll alerts every 30s if Sheets configured
 if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
-  setInterval(platPollAlertas, 30000);
-  setInterval(planPollAlertas, 30000);
+  // Poll every 15s for faster alert delivery (was 30s)
+  setInterval(platPollAlertas, 15000);
+  setInterval(planPollAlertas, 15000);
+  // Also poll immediately on load
+  setTimeout(platPollAlertas, 3000);
+  setTimeout(planPollAlertas, 3000);
 }
 
 // ============================================================
@@ -3622,6 +3646,113 @@ window.addEventListener('resize', function() {
     document.body.classList.remove('mobile-mode');
   }
 });
+
+// ===== IMPRIMIR PROGRAMADOS =====
+function imprimirProgramados() {
+  // Get filtered data
+  const dataFiltro = document.getElementById('filter-prog2-data')?.value || '';
+  const search = document.getElementById('search-prog2')?.value || '';
+  const tipo = document.getElementById('filter-prog2-tipo')?.value || '';
+
+  let data = progData.filter(r => {
+    if (!r.frota && !r.ocup) return false;
+    if (tipo && r.tipo !== tipo) return false;
+    if (search) {
+      const s = (r.destino + r.frota + r.composicao + r.obs + r.dia).toLowerCase();
+      if (!s.includes(search.toLowerCase())) return false;
+    }
+    if (dataFiltro) {
+      const recDate = parseDateBR(r.gerado);
+      if (!recDate) return false;
+      const parts = dataFiltro.split('-').map(Number);
+      if (recDate.getFullYear() !== parts[0] || recDate.getMonth()+1 !== parts[1] || recDate.getDate() !== parts[2]) return false;
+    }
+    return true;
+  });
+  data.sort((a, b) => (a.saida || '').localeCompare(b.saida || ''));
+
+  if (!data.length) { showToast('Nenhum registro para imprimir', 'error'); return; }
+
+  const dataLabel = dataFiltro ? dataFiltro.split('-').reverse().join('/') : getDataHoje();
+  const cheios = data.filter(r => r.ocup >= 1).length;
+  const total = data.length;
+
+  const rows = data.map((r, i) => {
+    const pct = Math.round((r.ocup || 0) * 100);
+    const barColor = pct >= 100 ? '#16a34a' : pct >= 71 ? '#65a30d' : pct >= 51 ? '#ca8a04' : pct >= 31 ? '#ea580c' : pct > 0 ? '#dc2626' : '#e5e7eb';
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${r.gerado || '—'}</td>
+      <td><span style="background:${r.tipo==='Carro da Malha'?'rgba(0,178,0,.1)':r.tipo==='Carro Extra'?'rgba(234,88,12,.1)':'rgba(220,38,38,.1)'}; color:${r.tipo==='Carro da Malha'?'#15803d':r.tipo==='Carro Extra'?'#ea580c':'#dc2626'}; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700">${r.tipo === 'Carro da Malha' ? 'MALHA' : r.tipo === 'Carro Extra' ? 'EXTRA' : 'FORA'}</span></td>
+      <td style="font-weight:700">${r.destino}</td>
+      <td>${r.regiao || '—'}</td>
+      <td style="font-size:11px">${r.composicao}</td>
+      <td style="color:#00B200;font-weight:700;font-family:monospace">${r.saida}</td>
+      <td>${r.dia}</td>
+      <td style="font-family:monospace">${r.frota || '—'}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="width:60px;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px"></div>
+          </div>
+          <span style="font-weight:700;color:${barColor};font-family:monospace;font-size:12px">${pct}%</span>
+        </div>
+      </td>
+      <td>${r.prev_fech || '—'}</td>
+      <td style="font-style:italic;color:#6b7280">${r.obs || '—'}</td>
+    </tr>`;
+  }).join('');
+
+  const win = window.open('', '_blank');
+  if (!win) { showToast('Permita popups no navegador', 'error'); return; }
+  var printCss = [
+    "* { box-sizing: border-box; margin: 0; padding: 0; }",
+    "body { font-family: Arial, sans-serif; font-size: 12px; color: #111; background: #fff; padding: 20px; }",
+    ".header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #111; }",
+    ".header-title { font-size: 16px; font-weight: 700; }",
+    ".header-sub { font-size: 10px; color: #6b7280; margin-top: 2px; }",
+    ".stats { display: flex; gap: 16px; margin-bottom: 14px; }",
+    ".stat { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 14px; }",
+    ".stat-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: .06em; }",
+    ".stat-value { font-size: 18px; font-weight: 700; }",
+    "table { width: 100%; border-collapse: collapse; font-size: 11px; }",
+    "thead th { background: #f3f4f6; padding: 7px 8px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; color: #6b7280; border-bottom: 1.5px solid #e5e7eb; white-space: nowrap; }",
+    "tbody tr { border-bottom: 1px solid #f3f4f6; }",
+    "tbody td { padding: 6px 8px; vertical-align: middle; }",
+    ".footer { margin-top: 16px; padding-top: 10px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; font-size: 10px; color: #9ca3af; }",
+    "@media print { body { padding: 10px; } @page { margin: 10mm; size: landscape; } }"
+  ].join(" ");
+
+  var printTime = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+
+  var printHTML = "<!DOCTYPE html><html lang='pt-BR'><head><meta charset='UTF-8'>" +
+    "<title>Programados GRU - " + dataLabel + "</title>" +
+    "<style>" + printCss + "</style></head><body>" +
+    "<div class='header'><div>" +
+    "<div class='header-title'>Programacao de Veiculos OPL - GRU</div>" +
+    "<div class='header-sub'>TRAGETTA TRANSPORTES - GUARULHOS</div>" +
+    "</div><div style='text-align:right;font-size:12px'>" +
+    "Data: <strong>" + dataLabel + "</strong><br>" +
+    "Emitido em: " + getDataHoje() + " " + printTime + "<br>" +
+    "Por: Patrick Mafud Ramos</div></div>" +
+    "<div class='stats'>" +
+    "<div class='stat'><div class='stat-label'>Total</div><div class='stat-value' style='color:#00B200'>" + total + "</div></div>" +
+    "<div class='stat'><div class='stat-label'>100% Cheios</div><div class='stat-value' style='color:#15803d'>" + cheios + "</div></div>" +
+    "<div class='stat'><div class='stat-label'>Pendentes</div><div class='stat-value' style='color:#ea580c'>" + (total - cheios) + "</div></div>" +
+    "</div>" +
+    "<table><thead><tr>" +
+    "<th>#</th><th>Gerado em</th><th>Tipo</th><th>Destino</th><th>Regiao</th>" +
+    "<th>Composicao</th><th>Saida</th><th>Dia</th><th>Frota</th><th>Ocupacao</th>" +
+    "<th>Prev. Fechamento</th><th>Obs.</th>" +
+    "</tr></thead><tbody>" + rows + "</tbody></table>" +
+    "<div class='footer'>" +
+    "<span>Sistema de Programacao de Veiculos OPL - GRU - Tragetta Transportes</span>" +
+    "<span>Produzido por Patrick Mafud Ramos - (11) 93322-6881</span>" +
+    "</div></body></html>";
+
+  win.document.write(printHTML);
+  win.document.close();
+}
 
 </script>
 </body>
