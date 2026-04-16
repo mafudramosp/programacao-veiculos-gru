@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#111111">
 <meta name="description" content="Programação de Veículos OPL — GRU Tragetta Transportes">
 <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIj4KICA8cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgcng9IjMyIiBmaWxsPSIjMTExMTExIi8+CiAgPHRleHQgeD0iOTYiIHk9IjE0MCIgZm9udC1zaXplPSIxMTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCI+8J+amzwvdGV4dD4KPC9zdmc+">
-<link rel="manifest" id="pwa-manifest">
+<link rel="manifest" href="manifest.json">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Programação de Veículos — GRU</title>
@@ -3671,62 +3671,7 @@ if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS && typeof APPS_SCRIPT_URL 
 // ============================================================
 // PWA — INSTALAÇÃO NO CELULAR
 // ============================================================
-(function() {
-  // Inline manifest (data URI)
-  var manifest = {
-    "name": "Programação de Veículos OPL — GRU",
-    "short_name": "Prog. Veículos",
-    "description": "Sistema de programação de veículos — Tragetta Transportes GRU",
-    "start_url": "https://mafudramosp.github.io/programacao-veiculos-gru/",
-    "display": "standalone",
-    "orientation": "any",
-    "background_color": "#111111",
-    "theme_color": "#111111",
-    "icons": [
-      {
-        "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIj4KICA8cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgcng9IjMyIiBmaWxsPSIjMTExMTExIi8+CiAgPHRleHQgeD0iOTYiIHk9IjE0MCIgZm9udC1zaXplPSIxMTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCI+8J+amzwvdGV4dD4KPC9zdmc+",
-        "sizes": "192x192",
-        "type": "image/svg+xml",
-        "purpose": "any maskable"
-      },
-      {
-        "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxOTIgMTkyIj4KICA8cmVjdCB3aWR0aD0iMTkyIiBoZWlnaHQ9IjE5MiIgcng9IjMyIiBmaWxsPSIjMTExMTExIi8+CiAgPHRleHQgeD0iOTYiIHk9IjE0MCIgZm9udC1zaXplPSIxMTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCI+8J+amzwvdGV4dD4KPC9zdmc+",
-        "sizes": "512x512",
-        "type": "image/svg+xml",
-        "purpose": "any maskable"
-      }
-    ],
-    "categories": ["business", "productivity"]
-  };
-  var blob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
-  var manifestUrl = URL.createObjectURL(blob);
-  document.getElementById('pwa-manifest').setAttribute('href', manifestUrl);
-
-  // Service Worker (offline cache)
-  if ('serviceWorker' in navigator) {
-    var swCode = `
-      const CACHE = 'pvg-v1';
-      self.addEventListener('install', e => {
-        e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./'])));
-        self.skipWaiting();
-      });
-      self.addEventListener('activate', e => {
-        e.waitUntil(caches.keys().then(keys =>
-          Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-        ));
-        self.clients.claim();
-      });
-      self.addEventListener('fetch', e => {
-        e.respondWith(
-          caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => cached))
-        );
-      });
-    `;
-    var swBlob = new Blob([swCode], {type: 'application/javascript'});
-    var swUrl = URL.createObjectURL(swBlob);
-    navigator.serviceWorker.register(swUrl).catch(() => {});
-  }
-})();
+// PWA manifest served as manifest.json
 
 // Install prompt
 var _deferredPrompt = null;
@@ -4006,6 +3951,31 @@ function imprimirProgramados() {
   win.document.write(printHTML);
   win.document.close();
 }
+
+// ============================================================
+// PWA — SERVICE WORKER + INSTALL PROMPT
+// ============================================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('./sw.js').then(function(reg) {
+      console.log('SW registered:', reg.scope);
+    }).catch(function(err) {
+      console.log('SW registration failed:', err);
+    });
+  });
+}
+
+var _deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  _deferredPrompt = e;
+  console.log('Install prompt ready');
+});
+window.addEventListener('appinstalled', function() {
+  _deferredPrompt = null;
+  showToast('✅ App instalado com sucesso!', 'success');
+});
+
 
 </script>
 </body>
