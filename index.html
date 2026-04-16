@@ -1678,31 +1678,38 @@ async function deleteFromSheets(id) {
 }
 
 function loadData() {
+  // Always show local cache immediately (fast startup)
+  loadLocal();
+  renderProg();
+  renderProgramados();
+
   if (USAR_SHEETS && APPS_SCRIPT_URL) {
-    // Sheets mode: start EMPTY, only populate from Sheets
-    progData = [];
-    showSyncStatus('⟳ Sincronizando com Google Sheets...');
-    sheetsGet().then(records => {
-      progData = deduplicar(records);
-      nextId = progData.length > 0 ? (Math.max(...progData.map(r => r._id || 0)) + 1) : 4000;
-      saveLocal();
-      renderProg();
-      renderHist();
-      hideSyncStatus();
-      showToast('✅ ' + progData.length + ' registros carregados', 'success');
-    }).catch(e => {
-      // Offline fallback: use localStorage
-      console.warn('Sheets offline, using local cache:', e.message);
-      loadLocal();
-      renderProg();
-      renderHist();
-      hideSyncStatus();
-      showToast('⚠️ Offline — usando cache local', 'info');
-    });
-  } else {
-    loadLocal();
+    showSyncStatus('&#8635; Sincronizando...');
+    sheetsGetWithRetry(3)
+      .then(function(records) {
+        progData = deduplicar(records);
+        nextId = progData.length > 0 ? (Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1) : 4000;
+        saveLocal(); renderProg(); renderProgramados(); hideSyncStatus();
+        showToast('&#10003; ' + progData.length + ' registros carregados', 'success');
+      })
+      .catch(function(e) {
+        hideSyncStatus();
+        console.warn('Sheets offline:', e.message);
+        // Silently use local — no error toast
+      });
   }
 }
+
+function sheetsGetWithRetry(n) {
+  return sheetsGet().catch(function(e) {
+    if (n > 1) {
+      return new Promise(function(res){ setTimeout(res, 4000); })
+        .then(function(){ return sheetsGetWithRetry(n - 1); });
+    }
+    return Promise.reject(e);
+  });
+}
+
 
 function deduplicar(records) {
   // Remove duplicates by same destino+saida+dia combination (keep latest)
@@ -3050,24 +3057,20 @@ function requestNotifPermission() {
 
 
 function syncManual() {
-  if (!USAR_SHEETS || !APPS_SCRIPT_URL) {
-    showToast('Configure a URL do Apps Script no arquivo HTML', 'error');
-    return;
-  }
-  showSyncStatus('⟳ Sincronizando...');
-  sheetsGet().then(records => {
-    progData = records;
-    nextId = records.length > 0 ? (Math.max(...records.map(r => r._id || 0)) + 1) : 4000;
-    saveLocal();
-    renderProg();
-    renderHist();
-    hideSyncStatus();
-    showToast('✅ ' + records.length + ' registros sincronizados!', 'success');
-  }).catch(e => {
-    hideSyncStatus();
-    showToast('Erro ao sincronizar: ' + e.message, 'error');
-  });
+  showSyncStatus('&#8635; Sincronizando...');
+  sheetsGetWithRetry(2)
+    .then(function(records) {
+      progData = deduplicar(records);
+      nextId = progData.length > 0 ? (Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1) : 4000;
+      saveLocal(); renderProg(); renderProgramados(); hideSyncStatus();
+      showToast('&#10003; ' + progData.length + ' sincronizados!', 'success');
+    })
+    .catch(function(e) {
+      hideSyncStatus();
+      showToast('&#9888; Sheets offline — usando cache local', 'info');
+    });
 }
+
 
 // Show sync button if Sheets configured
 if (USAR_SHEETS && APPS_SCRIPT_URL) {
@@ -3498,14 +3501,24 @@ document.addEventListener('touchstart', ativarAudio, { once: false });
 function enviarAlertaViaGet(de, mensagem) {
   if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
   var cbName = 'saveCb_' + Date.now();
-  var timeout = setTimeout(function() { delete window[cbName]; }, 10000);
+  var timeout = setTimeout(function() {
+    delete window[cbName];
+    console.warn('Timeout ao salvar alerta - tente republicar o Apps Script');
+    // Fallback: try POST
+    enviarAlertaViaPost(de, mensagem);
+  }, 8000);
+
   window[cbName] = function(json) {
     clearTimeout(timeout);
     delete window[cbName];
     if (json && json.status === 'ok') {
-      console.log('Alerta salvo:', de, mensagem);
+      console.log('Alerta salvo via GET id=' + json.id);
+    } else {
+      console.warn('GET retornou erro, tentando POST');
+      enviarAlertaViaPost(de, mensagem);
     }
   };
+
   var url = APPS_SCRIPT_URL +
     '?action=salvarAlerta' +
     '&de=' + encodeURIComponent(de) +
@@ -3514,9 +3527,24 @@ function enviarAlertaViaGet(de, mensagem) {
     '&t=' + Date.now();
   var script = document.createElement('script');
   script.src = url;
-  script.onerror = function() { clearTimeout(timeout); delete window[cbName]; };
+  script.onerror = function() {
+    clearTimeout(timeout);
+    delete window[cbName];
+    enviarAlertaViaPost(de, mensagem);
+  };
   document.head.appendChild(script);
 }
+
+// Fallback: POST (original method)
+function enviarAlertaViaPost(de, mensagem) {
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    body: JSON.stringify({ action: 'alerta', de: de, mensagem: mensagem }),
+    headers: { 'Content-Type': 'text/plain' }
+  }).catch(function() {});
+}
+
 
 
 // ===== PLATAFORMA — ADICIONAR PROGRAMAÇÃO =====
