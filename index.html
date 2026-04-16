@@ -2971,8 +2971,7 @@ setInterval(checkHorarios, 30000);
 checkHorarios();
 requestNotifPermission();
 // ===== PLATAFORMA — ACESSO SIMPLIFICADO =====
-var platLastAlertId = null;
-var lastPlanAlertId = null;
+// Alert tracking via Sets (see _shownPlatIds, _shownPlanIds)
 
 function renderPlataforma() {
   const dia = getDiaHoje();
@@ -3162,12 +3161,26 @@ function sheetsGetAlertas(callback) {
   document.head.appendChild(script);
 }
 
+
+// Track shown alert IDs (prevents duplicates across both polling functions)
+var _shownPlatIds = new Set();
+var _shownPlanIds = new Set();
+
+function verificarAlertasPlanejamento(alertas) {
+  // Find ALL new alerts from planejamento (not just latest)
+  var novos = alertas.filter(function(a) {
+    return a.de === 'planejamento' && !_shownPlatIds.has(String(a.id));
+  });
+  novos.forEach(function(a) {
+    _shownPlatIds.add(String(a.id));
+    showPlatAlert(a.msg, a.ts);
+  });
+}
+
 function platPollAlertas() {
-  sheetsGetAlertas(alertas => {
-    const latest = alertas.find(a => a.de === 'planejamento');
-    if (!latest || platLastAlertId === String(latest.id)) return;
-    platLastAlertId = String(latest.id);
-    showPlatAlert(latest.msg, latest.ts);
+  // Dedicated poll for Plataforma - checks for alerts from Planejamento
+  sheetsGetAlertas(function(alertas) {
+    verificarAlertasPlanejamento(alertas);
   });
 }
 
@@ -3294,22 +3307,21 @@ function escapeHtml(s) {
 }
 
 function planPollAlertas() {
-  sheetsGetAlertas(alertas => {
-    // Check for messages FROM plataforma (show on planning side)
-    const platMsg = alertas.find(a => a.de === 'plataforma');
-    if (platMsg && lastPlanAlertId !== String(platMsg.id)) {
-      lastPlanAlertId = String(platMsg.id);
-      addMsgPlataforma(platMsg.msg, platMsg.ts);
-    }
-    // Check for messages FROM planejamento (show on plataforma side if on that tab)
-    const planMsg = alertas.find(a => a.de === 'planejamento');
-    if (planMsg && platLastAlertId !== String(planMsg.id)) {
-      platLastAlertId = String(planMsg.id);
-      showPlatAlert(planMsg.msg, planMsg.ts);
-    }
+  // Shared poll - checks both directions
+  sheetsGetAlertas(function(alertas) {
+    // Messages FROM plataforma → show in Planning panel
+    var platMsgs = alertas.filter(function(a) { return a.de === 'plataforma'; });
+    platMsgs.forEach(function(m) {
+      var mid = String(m.id);
+      if (!_shownPlanIds.has(mid)) {
+        _shownPlanIds.add(mid);
+        addMsgPlataforma(m.msg, m.ts);
+      }
+    });
+    // Alerts FROM planejamento → show on Plataforma
+    verificarAlertasPlanejamento(alertas);
   });
 }
-
 
 // ============================================================
 // SISTEMA DE ALERTA SONORO + VIBRAÇÃO
@@ -3431,8 +3443,8 @@ document.addEventListener('click', e => {
 // Poll alerts every 30s if Sheets configured
 if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
   // Poll every 15s for faster alert delivery (was 30s)
-  setInterval(platPollAlertas, 15000);
-  setInterval(planPollAlertas, 15000);
+  setInterval(platPollAlertas, 10000);
+  setInterval(planPollAlertas, 10000);
   // Also poll immediately on load
   setTimeout(platPollAlertas, 3000);
   setTimeout(planPollAlertas, 3000);
