@@ -1288,7 +1288,17 @@
         </button>
       </div>
     </div>
-    <!-- Search bar -->
+    <!-- Adicionar button + Search bar -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center">
+      <button onclick="abrirAddPlat()" style="
+        flex-shrink:0;padding:12px 16px;background:#00B200;color:#fff;
+        border:none;border-radius:10px;font-size:14px;font-weight:700;
+        font-family:'Poppins',sans-serif;cursor:pointer;white-space:nowrap;
+        display:flex;align-items:center;gap:6px;
+      ">
+        <span style="font-size:18px">＋</span> Adicionar
+      </button>
+    </div>
     <div style="position:relative;margin-bottom:10px">
       <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none;color:#9ca3af">🔍</span>
       <input type="text" id="plat-search" placeholder="Buscar destino... ex: REC"
@@ -1323,6 +1333,105 @@
   <div style="display:flex;gap:8px;margin-top:10px">
     <button class="btn btn-success" onclick="enviarAlertaPlataforma()" style="background:#00B200">Enviar Alerta</button>
     <button class="btn btn-ghost" onclick="fecharAlertPanel()">Cancelar</button>
+  </div>
+</div>
+
+
+<!-- PLATAFORMA — ADICIONAR PROGRAMAÇÃO (slide-up) -->
+<div id="add-plat-panel" style="
+  position:fixed;inset:0;z-index:4000;
+  background:rgba(0,0,0,.65);backdrop-filter:blur(4px);
+  display:none;align-items:flex-end;justify-content:center;
+  font-family:'Poppins',sans-serif;
+">
+  <div style="
+    background:#fff;width:100%;max-width:520px;
+    border-radius:20px 20px 0 0;padding:20px 20px 32px;
+    max-height:90vh;overflow-y:auto;
+    box-shadow:0 -8px 32px rgba(0,0,0,.2);
+  ">
+    <!-- Handle -->
+    <div style="width:40px;height:4px;background:#d1d5db;border-radius:2px;margin:0 auto 16px;"></div>
+    <div style="font-size:16px;font-weight:700;color:#111;margin-bottom:16px">➕ Adicionar Programação</div>
+
+    <!-- DESTINO -->
+    <div style="margin-bottom:14px;position:relative">
+      <div class="plat-lbl">Destino <span style="color:#dc2626">*</span></div>
+      <input class="plat-input" type="text" id="ap-destino" placeholder="Ex: REC"
+        oninput="onApDestInput()" autocomplete="off" style="text-transform:uppercase">
+      <div id="ap-sugg" style="
+        display:none;position:absolute;top:100%;left:0;right:0;z-index:100;
+        background:#fff;border:1px solid #d1d5db;border-radius:8px;
+        max-height:180px;overflow-y:auto;
+        box-shadow:0 8px 20px rgba(0,0,0,.12);margin-top:4px;
+      "></div>
+    </div>
+
+    <!-- COMPOSIÇÃO -->
+    <div style="margin-bottom:14px">
+      <div class="plat-lbl">Composição</div>
+      <input class="plat-input" type="text" id="ap-composicao" placeholder="Ex: REC, CAU" readonly style="background:#f9fafb;color:#6b7280">
+    </div>
+
+    <!-- SAÍDA + DIA em 2 colunas -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div>
+        <div class="plat-lbl">Horário Saída <span style="color:#dc2626">*</span></div>
+        <input class="plat-input" type="time" id="ap-saida">
+      </div>
+      <div>
+        <div class="plat-lbl">Dia <span style="color:#dc2626">*</span></div>
+        <select class="plat-input" id="ap-dia" style="padding:12px 14px">
+          <option value="">Dia...</option>
+          <option>Segunda-feira</option><option>Terça-feira</option>
+          <option>Quarta-feira</option><option>Quinta-feira</option>
+          <option>Sexta-feira</option><option>Sábado</option><option>Domingo</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- FROTA -->
+    <div style="margin-bottom:14px">
+      <div class="plat-lbl">Frota / Placa <span style="color:#dc2626">*</span></div>
+      <input class="plat-input" type="text" id="ap-frota" placeholder="Ex: 2154 ou ABC1D23" autocomplete="off">
+    </div>
+
+    <!-- OCUPAÇÃO -->
+    <div style="margin-bottom:20px">
+      <div class="plat-lbl">Ocupação % <span style="color:#dc2626">*</span></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input class="plat-input" type="number" id="ap-ocup" min="0" max="100"
+          placeholder="0" oninput="updateApBar()" style="width:100px;text-align:center;font-size:18px;font-weight:700">
+        <span style="font-size:20px;font-weight:700;color:#374151">%</span>
+        <div style="flex:1;height:12px;background:#e5e7eb;border-radius:6px;overflow:hidden">
+          <div id="ap-bar" style="height:100%;border-radius:6px;background:#9ca3af;width:0%;transition:width .3s,background .3s"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TIPO -->
+    <div style="margin-bottom:20px">
+      <div class="plat-lbl">Tipo</div>
+      <select class="plat-input" id="ap-tipo" style="padding:12px 14px">
+        <option value="Carro da Malha">🔵 Carro da Malha</option>
+        <option value="Carro Extra">🟠 Carro Extra</option>
+        <option value="Fora da Malha">🔴 Fora da Malha</option>
+      </select>
+    </div>
+
+    <!-- BOTÕES -->
+    <div style="display:flex;gap:10px">
+      <button onclick="salvarAddPlat()" style="
+        flex:1;padding:14px;background:#00B200;color:#fff;border:none;
+        border-radius:10px;font-size:15px;font-weight:700;
+        font-family:'Poppins',sans-serif;cursor:pointer;
+      ">💾 Salvar</button>
+      <button onclick="fecharAddPlat()" style="
+        flex-shrink:0;padding:14px 20px;background:#f3f4f6;color:#374151;border:none;
+        border-radius:10px;font-size:15px;font-weight:600;
+        font-family:'Poppins',sans-serif;cursor:pointer;
+      ">Cancelar</button>
+    </div>
   </div>
 </div>
 
@@ -3409,6 +3518,115 @@ function enviarAlertaViaGet(de, mensagem) {
   document.head.appendChild(script);
 }
 
+
+// ===== PLATAFORMA — ADICIONAR PROGRAMAÇÃO =====
+function abrirAddPlat() {
+  // Reset form
+  ['ap-destino','ap-composicao','ap-saida','ap-frota','ap-ocup'].forEach(function(id) {
+    var el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('ap-dia').value = getDiaHoje();
+  document.getElementById('ap-tipo').value = 'Carro da Malha';
+  var bar = document.getElementById('ap-bar');
+  if (bar) { bar.style.width = '0%'; bar.style.background = '#9ca3af'; }
+  document.getElementById('ap-sugg').style.display = 'none';
+  document.getElementById('add-plat-panel').style.display = 'flex';
+  setTimeout(function() { document.getElementById('ap-destino').focus(); }, 200);
+}
+
+function fecharAddPlat() {
+  document.getElementById('add-plat-panel').style.display = 'none';
+}
+
+// Close on backdrop click
+document.addEventListener('click', function(e) {
+  var panel = document.getElementById('add-plat-panel');
+  if (panel && e.target === panel) fecharAddPlat();
+});
+
+function updateApBar() {
+  var v = Math.min(parseInt(document.getElementById('ap-ocup').value) || 0, 100);
+  var bar = document.getElementById('ap-bar');
+  if (bar) { bar.style.width = v + '%'; bar.style.background = getOcupColor(v); }
+}
+
+function onApDestInput() {
+  var val = (document.getElementById('ap-destino').value || '').toUpperCase();
+  var cont = document.getElementById('ap-sugg');
+  if (!val || val.length < 1) { cont.style.display = 'none'; return; }
+
+  var matches = [];
+  var seen = new Set();
+  gradeData.forEach(function(r) {
+    if ((r.destino.toUpperCase().startsWith(val) || r.composicao.toUpperCase().includes(val)) && matches.length < 6) {
+      var k = r.destino + r.saida + r.composicao;
+      if (!seen.has(k)) { seen.add(k); matches.push(r); }
+    }
+  });
+
+  if (!matches.length) { cont.style.display = 'none'; return; }
+  cont.style.display = 'block';
+  cont.innerHTML = matches.map(function(r) {
+    var idx = gradeData.indexOf(r);
+    return '<div onclick="selectApSugg(' + idx + ')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f3f4f6;font-family:Poppins,sans-serif">' +
+      '<span style="font-size:16px;font-weight:700;color:#111">' + r.destino + '</span>' +
+      ' <span style="color:#9ca3af;font-size:12px">— ' + r.dia + '</span>' +
+      '<div style="font-size:11px;color:#00B200;font-family:monospace;margin-top:2px">' + r.saida + ' · ' + r.composicao + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function selectApSugg(idx) {
+  var r = gradeData[idx];
+  document.getElementById('ap-destino').value = r.destino;
+  document.getElementById('ap-composicao').value = r.composicao;
+  document.getElementById('ap-saida').value = r.saida;
+  document.getElementById('ap-dia').value = r.dia;
+  document.getElementById('ap-sugg').style.display = 'none';
+}
+
+function salvarAddPlat() {
+  var destino = (document.getElementById('ap-destino').value || '').toUpperCase().trim();
+  var composicao = document.getElementById('ap-composicao').value || '';
+  var saida = document.getElementById('ap-saida').value || '';
+  var dia = document.getElementById('ap-dia').value || '';
+  var frota = document.getElementById('ap-frota').value || '';
+  var ocupPct = parseInt(document.getElementById('ap-ocup').value) || 0;
+  var tipo = document.getElementById('ap-tipo').value || 'Carro da Malha';
+
+  if (!destino || !saida || !dia || !frota || !ocupPct) {
+    showToast('Preencha todos os campos obrigatórios *', 'error');
+    return;
+  }
+
+  var gradeRow = gradeData.find(function(g) { return g.destino === destino && g.saida === saida && g.dia === dia; });
+  var existing = progData.find(function(p) { return p.destino === destino && p.saida === saida && p.dia === dia; });
+
+  var rec;
+  if (existing) {
+    existing.frota = frota; existing.ocup = ocupPct / 100;
+    existing.tipo = tipo; existing.gerado = now();
+    rec = existing;
+  } else {
+    rec = {
+      _id: nextId++, gerado: now(), origem: 'GRU',
+      destino: destino,
+      regiao: gradeRow ? gradeRow.regiao : '',
+      composicao: composicao || (gradeRow ? gradeRow.composicao : destino),
+      saida: saida, dia: dia, tipo: tipo,
+      frota: frota, ocup: ocupPct / 100,
+      prev_fech: '', obs: '', tipo_prior: '', data_crit: '', id: ''
+    };
+    progData.push(rec);
+  }
+
+  saveData(rec);
+  fecharAddPlat();
+  renderPlataforma();
+  renderProg();
+  showToast(destino + ' adicionado com sucesso!', 'success');
+}
+
 function platEnviarMsg() {
   const msg = document.getElementById('plat-msg-input')?.value?.trim();
   if (!msg) return;
@@ -3547,35 +3765,58 @@ function instalarApp() {
 function showInstallInstructions() {
   var isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   var isAndroid = /Android/.test(navigator.userAgent);
-  var msg = '';
+  var icon, steps;
   if (isIOS) {
-    msg = '<div style="font-size:28px;margin-bottom:10px">🍎</div>' +
-          '<b>iPhone / iPad (Safari)</b><br><br>' +
-          '1. Abra este arquivo no <b>Safari</b><br>' +
-          '2. Toque em <b>📤 Compartilhar</b> (botão do meio da barra)<br>' +
-          '3. Role e toque em <b>"Adicionar à Tela de Início"</b><br>' +
-          '4. Toque em <b>Adicionar</b> ✓';
+    icon = '🍎';
+    steps = [
+      'Abra este link no <b>Safari</b> (nao no Chrome)',
+      'Toque em <b>Compartilhar</b> 📤 na barra inferior',
+      'Role e toque em <b>Adicionar a Tela de Inicio</b>',
+      'Toque em <b>Adicionar</b> no canto superior direito'
+    ];
   } else if (isAndroid) {
-    msg = '<div style="font-size:28px;margin-bottom:10px">🤖</div>' +
-          '<b>Android (Chrome)</b><br><br>' +
-          '1. Abra este arquivo no <b>Chrome</b><br>' +
-          '2. Toque em <b>⋮ Menu</b> (3 pontos no canto)<br>' +
-          '3. Toque em <b>"Adicionar à tela inicial"</b><br>' +
-          '4. Toque em <b>Adicionar</b> ✓<br><br>' +
-          '<small style="color:#9ca3af">💡 Se não aparecer a opção, hospede em GitHub Pages para instalação automática</small>';
+    icon = '🤖';
+    steps = [
+      'Certifique-se de estar no <b>Chrome</b>',
+      'Toque nos <b>3 pontos ⋮</b> no canto superior direito',
+      'Toque em <b>Adicionar a tela inicial</b>',
+      'Toque em <b>Adicionar</b> para confirmar'
+    ];
   } else {
-    msg = '<div style="font-size:28px;margin-bottom:10px">💻</div>' +
-          '<b>Computador (Chrome / Edge)</b><br><br>' +
-          '1. Abra no <b>Chrome</b> ou <b>Edge</b><br>' +
-          '2. Clique em <b>⊕</b> na barra de endereços<br>' +
-          '   (ou menu ⋮ → "Instalar Programação de Veículos")<br>' +
-          '3. Clique em <b>Instalar</b> ✓<br><br>' +
-          '<small style="color:#9ca3af">💡 Se não aparecer, hospede em GitHub Pages para o botão automático funcionar</small>';
+    icon = '💻';
+    steps = [
+      'Abra no <b>Chrome</b> ou <b>Edge</b>',
+      'Clique no icone <b>+</b> na barra de endereco',
+      'Clique em <b>Instalar</b>'
+    ];
   }
-  var modal = document.getElementById('install-modal');
-  var text = document.getElementById('install-modal-text');
-  if (modal && text) { text.innerHTML = msg; modal.classList.add('open'); }
+
+  var existing = document.getElementById('install-overlay-full');
+  if (existing) existing.remove();
+
+  var stepsHTML = steps.map(function(s, i) {
+    return '<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid #f3f4f6;text-align:left">' +
+      '<span style="background:#00B200;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:1px">' + (i+1) + '</span>' +
+      '<span style="font-size:14px;color:#374151;line-height:1.5">' + s + '</span>' +
+    '</div>';
+  }).join('');
+
+  var el = document.createElement('div');
+  el.id = 'install-overlay-full';
+  el.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;padding:20px;font-family:Poppins,Arial,sans-serif';
+  el.innerHTML =
+    '<div style="background:#fff;border-radius:20px;padding:28px 24px;max-width:380px;width:100%;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.4)">' +
+    '<div style="font-size:52px;margin-bottom:8px">' + icon + '</div>' +
+    '<div style="font-size:18px;font-weight:700;color:#111;margin-bottom:4px">Instalar no dispositivo</div>' +
+    '<div style="font-size:12px;color:#9ca3af;margin-bottom:18px">Siga os passos abaixo</div>' +
+    '<div style="margin-bottom:20px">' + stepsHTML + '</div>' +
+    '<button id="install-close-btn" style="width:100%;padding:13px;background:#111;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer">Entendido ✓</button>' +
+    '</div>';
+  document.body.appendChild(el);
+  document.getElementById('install-close-btn').onclick = function() { el.remove(); };
+  el.addEventListener('click', function(e) { if (e.target === el) el.remove(); });
 }
+
 
 // ============================================================
 // SELEÇÃO DE PAPEL (MOBILE)
