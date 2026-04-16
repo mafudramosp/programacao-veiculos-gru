@@ -798,11 +798,12 @@
     .mobile-bottom-nav { display: none !important; }
   }
   @media (max-width: 768px) {
-    /* Hide top nav bar on mobile after role selection */
     .mobile-mode .nav { display: none; }
     .mobile-mode .header { padding: 0 12px; }
     .mobile-mode body { padding-bottom: 64px; }
     .mobile-bottom-nav.visible { display: block; }
+    /* Push fixed msg bar above mobile bottom nav */
+    .mobile-mode #plat-fixed-bar { bottom: 64px; }
   }
 
 </style>
@@ -810,6 +811,35 @@
 </head>
 <body>
 
+
+
+<!-- FIXED MSG BAR — always visible on Plataforma -->
+<div id="plat-fixed-bar" style="
+  display:none;
+  position:fixed;bottom:0;left:0;right:0;z-index:2000;
+  background:#fff;border-top:1px solid #e5e7eb;
+  padding:10px 12px;box-shadow:0 -4px 16px rgba(0,0,0,.12);
+  font-family:'Poppins',sans-serif;
+">
+  <div style="max-width:520px;margin:0 auto;display:flex;align-items:center;gap:8px">
+    <textarea id="plat-msg-input" rows="1" placeholder="💬 Mensagem ao Planejamento..."
+      style="flex:1;border:1.5px solid #d1d5db;border-radius:24px;padding:10px 16px;
+      font-size:14px;font-family:'Poppins',sans-serif;resize:none;outline:none;
+      box-sizing:border-box;line-height:1.4;max-height:80px;overflow-y:auto;
+      transition:border-color .15s"
+      onfocus="this.style.borderColor='#00B200'"
+      onblur="this.style.borderColor='#d1d5db'"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();platEnviarMsg()}"
+    ></textarea>
+    <button onclick="platEnviarMsg()" style="
+      flex-shrink:0;width:44px;height:44px;
+      background:#00B200;color:#fff;border:none;border-radius:50%;
+      font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+      transition:background .15s;
+    " onmouseover="this.style.background='#007A00'" onmouseout="this.style.background='#00B200'"
+    title="Enviar">↑</button>
+  </div>
+</div>
 
 <!-- MOBILE ROLE SELECTOR -->
 <div class="role-screen" id="role-screen">
@@ -1312,16 +1342,8 @@
     </div>
     <!-- Cards will be injected here -->
     <div id="plat-cards"></div>
-    <!-- Send message to Planejamento -->
-    <div class="plat-msg-box" style="margin-top:4px">
-      <div class="plat-msg-title">💬 Enviar mensagem ao Planejamento</div>
-      <textarea id="plat-msg-input" rows="2" placeholder="Ex: Carreta no CPQ encostada..."
-        style="width:100%;border:1.5px solid #d1d5db;border-radius:8px;padding:10px;font-size:14px;font-family:'Poppins',sans-serif;resize:none;outline:none;box-sizing:border-box"></textarea>
-      <button onclick="platEnviarMsg()"
-        style="margin-top:8px;width:100%;padding:12px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;font-family:'Poppins',sans-serif;cursor:pointer">
-        Enviar ↑
-      </button>
-    </div>
+    <!-- Spacer so last card isn't hidden behind the fixed bar -->
+    <div style="height:80px"></div>
   </div>
 </div>
 
@@ -1816,6 +1838,7 @@ function showTab(tab) {
     if (dot) dot.remove();
   }
   if (tab === 'grade') renderGrade();
+  document.getElementById('plat-fixed-bar').style.display = (tab === 'plataforma') ? 'block' : 'none';
   if (tab === 'plataforma') { const si = document.getElementById('plat-search'); if(si) si.value=''; const nb=document.getElementById('plat-no-result'); if(nb) nb.style.display='none';
     renderPlataforma();
     // Remove alert dot from tab
@@ -3864,6 +3887,7 @@ function updateMobileNav(activeTab) {
 
 // Run on load
 // Role screen is visible by default in CSS - no JS needed to show it
+document.getElementById('plat-fixed-bar').style.display = 'none';
 
 window.addEventListener('resize', function() {
   if (!isMobile()) {
