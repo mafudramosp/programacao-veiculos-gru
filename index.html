@@ -1029,7 +1029,6 @@
             <th style="width:160px">Obs.</th>
             <th style="width:110px">Prioridade</th>
             <th style="width:160px">Data Crítica</th>
-            <th style="width:80px">Ações</th>
           </tr>
         </thead>
         <tbody id="tbody-prog"></tbody>
@@ -2001,7 +2000,7 @@ function renderProg() {
               value="${r.ocupPct || ''}"
               placeholder="0"
               style="width:48px;padding:3px 5px;font-size:12px;font-weight:600;color:${ocupColor};text-align:center;border-color:${r.ocupPct > 0 ? ocupColor+'66' : 'var(--border)'}"
-              oninput="updateOcupBar('${r._rowId}')">
+              oninput="updateOcupBar('${r._rowId}')" onblur="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})">
             <span style="font-size:11px;color:var(--text3)">%</span>
           </div>
         </div>
@@ -2030,12 +2029,7 @@ function renderProg() {
         </select>
       </td>
       <td><input type="date" id="crit_${r._rowId}" value="${toDateOnly(r.data_crit)}" style="width:145px;font-size:12px"></td>
-      <td>
-        <div style="display:flex;gap:3px">
-          <button class="btn btn-primary btn-sm" onclick="salvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})" title="Salvar linha">💾</button>
-          ${r._id !== null ? `<button class="btn btn-ghost btn-sm" onclick="deleteProg(${r._id})" style="color:var(--red)" title="Limpar">✕</button>` : ''}
-        </div>
-      </td>
+      
     </tr>`;
   }).join('');
 }
@@ -2060,7 +2054,16 @@ function updateOcupBar(rowId) {
   input.style.borderColor = pct > 0 ? color + '88' : 'var(--border)';
 }
 
-function salvarLinha(rowId, destino, saida, dia, existingId) {
+
+function autoSalvarLinha(rowId, destino, saida, dia, existingId) {
+  var frota = document.getElementById('frota_' + rowId)?.value || '';
+  var ocupPct = parseInt(document.getElementById('ocup_' + rowId)?.value) || 0;
+  // Only save if at least one field is filled
+  if (!frota && !ocupPct) return;
+  salvarLinha(rowId, destino, saida, dia, existingId, true); // silent=true
+}
+
+function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
   const ocupPct = parseInt(document.getElementById('ocup_' + rowId)?.value) || 0;
   const tipo = document.getElementById('tipo_' + rowId)?.value || 'Carro da Malha';
   const frota = document.getElementById('frota_' + rowId)?.value || '';
