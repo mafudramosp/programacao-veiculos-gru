@@ -1703,7 +1703,7 @@ function loadData() {
   // Always show local cache immediately (fast startup)
   loadLocal();
   renderProg();
-  renderProgramados();
+  renderHist();
 
   if (USAR_SHEETS && APPS_SCRIPT_URL) {
     showSyncStatus('&#8635; Sincronizando...');
@@ -1711,7 +1711,7 @@ function loadData() {
       .then(function(records) {
         progData = deduplicar(records);
         nextId = progData.length > 0 ? (Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1) : 4000;
-        saveLocal(); renderProg(); renderProgramados(); hideSyncStatus();
+        saveLocal(); renderProg(); renderHist(); hideSyncStatus();
         showToast('&#10003; ' + progData.length + ' registros carregados', 'success');
       })
       .catch(function(e) {
@@ -3085,7 +3085,7 @@ function syncManual() {
     .then(function(records) {
       progData = deduplicar(records);
       nextId = progData.length > 0 ? (Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1) : 4000;
-      saveLocal(); renderProg(); renderProgramados(); hideSyncStatus();
+      saveLocal(); renderProg(); renderHist(); hideSyncStatus();
       showToast('&#10003; ' + progData.length + ' sincronizados!', 'success');
     })
     .catch(function(e) {
