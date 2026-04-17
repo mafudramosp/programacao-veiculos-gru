@@ -679,11 +679,11 @@
   }
   /* Fixed lateral alert panel */
   .plat-alert-banner {
-    display: none;
+    display: block;
     position: fixed;
     top: 50%;
     right: 0;
-    transform: translateY(-50%) translateX(100%);
+    transform: translateY(-50%) translateX(110%);
     z-index: 5000;
     width: 260px;
     background: #1a1a2e;
@@ -694,8 +694,8 @@
     transition: transform .4s cubic-bezier(.34,1.56,.64,1);
   }
   .plat-alert-banner.show {
-    display: block;
-    transform: translateY(-50%) translateX(0);
+    display: block !important;
+    transform: translateY(-50%) translateX(0) !important;
   }
   .plat-alert-close {
     position: absolute; top: 8px; right: 10px;
@@ -3323,37 +3323,35 @@ function platPollAlertas() {
 var _pendingPlatAlert = null;
 
 function showPlatAlert(msg, ts) {
-  const platTab = document.getElementById('tab-plataforma-content');
-  const isOnPlatTab = platTab?.classList.contains('active');
+  // Always show the panel regardless of which tab is active
+  // Store as pending too, in case user switches tabs later
+  _pendingPlatAlert = { msg: msg, ts: ts };
+  _showPlatAlertPanel(msg, ts);
 
-  if (isOnPlatTab) {
-    // Show lateral panel immediately
-    _showPlatAlertPanel(msg, ts);
-  } else {
-    // Store for when user enters plataforma tab
-    _pendingPlatAlert = { msg, ts };
-    // Add orange pulsing dot to tab button
-    const navBtn = document.getElementById('tab-plataforma');
-    if (navBtn && !navBtn.querySelector('.plat-alert-tab-dot')) {
-      const dot = document.createElement('span');
-      dot.className = 'plat-alert-tab-dot';
-      navBtn.appendChild(dot);
-    }
-    // Simple toast on the current tab (no panel)
-    showToast('📢 Novo alerta na aba Plataforma!', 'info');
+  // Add dot to plataforma tab nav button
+  var navBtn = document.getElementById('tab-plataforma');
+  if (navBtn && !navBtn.querySelector('.plat-alert-tab-dot')) {
+    var dot = document.createElement('span');
+    dot.className = 'plat-alert-tab-dot';
+    navBtn.appendChild(dot);
   }
 }
 
 function _showPlatAlertPanel(msg, ts) {
-  const banner = document.getElementById('plat-alert-banner');
-  const msgEl = document.getElementById('plat-alert-msg');
-  const tsEl = document.getElementById('plat-alert-ts');
+  var banner = document.getElementById('plat-alert-banner');
+  var msgEl = document.getElementById('plat-alert-msg');
+  var tsEl = document.getElementById('plat-alert-ts');
   if (!banner || !msgEl) return;
   msgEl.textContent = msg;
   if (tsEl) tsEl.textContent = ts || '';
-  banner.classList.add('show');
+  // Force show with inline style (bypasses any CSS issues)
+  banner.style.display = 'block';
+  banner.style.transform = 'translateY(-50%) translateX(0)';
+  banner.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
+  // Sound + vibration
   tocarAlertaUrgente();
 }
+
 
 
 function responderAlerta() {
@@ -3384,11 +3382,14 @@ function enviarResposta() {
   addMsgPlataforma('↩ Resposta: ' + msg, new Date().toLocaleString('pt-BR'));
 }
 function fecharPlatAlert() {
-  const banner = document.getElementById('plat-alert-banner');
-  if (banner) banner.classList.remove('show');
-  const box = document.getElementById('plat-resposta-box');
+  var banner = document.getElementById('plat-alert-banner');
+  if (banner) {
+    banner.classList.remove('show');
+    banner.style.transform = 'translateY(-50%) translateX(110%)';
+  }
+  var box = document.getElementById('plat-resposta-box');
   if (box) box.style.display = 'none';
-  const inp = document.getElementById('plat-resposta-input');
+  var inp = document.getElementById('plat-resposta-input');
   if (inp) inp.value = '';
 }
 
@@ -3522,23 +3523,31 @@ document.addEventListener('touchstart', ativarAudio, { once: false });
 
 // ===== ENVIAR ALERTA VIA GET (JSONP - funciona em todos os protocolos) =====
 function enviarAlertaViaGet(de, mensagem) {
-  if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
+  if (!USAR_SHEETS || !APPS_SCRIPT_URL) {
+    showToast('⚠️ Sheets não configurado', 'error');
+    return;
+  }
+
   var cbName = 'saveCb_' + Date.now();
+
+  // Timeout - Apps Script provavelmente não foi republicado
   var timeout = setTimeout(function() {
     delete window[cbName];
-    console.warn('Timeout ao salvar alerta - tente republicar o Apps Script');
-    // Fallback: try POST
+    // Fallback: POST
     enviarAlertaViaPost(de, mensagem);
-  }, 8000);
+    showToast('⚠️ Alerta enviado (POST fallback). Republique o Apps Script para garantir entrega.', 'info');
+  }, 6000);
 
   window[cbName] = function(json) {
     clearTimeout(timeout);
     delete window[cbName];
     if (json && json.status === 'ok') {
-      console.log('Alerta salvo via GET id=' + json.id);
+      // Sucesso confirmado!
+      showToast('✅ Alerta salvo no Sheets! Outros dispositivos receberão em até 10s.', 'success');
     } else {
-      console.warn('GET retornou erro, tentando POST');
+      // Apps Script retornou erro - tenta POST
       enviarAlertaViaPost(de, mensagem);
+      showToast('⚠️ Usando POST alternativo. Republique o Apps Script.', 'info');
     }
   };
 
@@ -3548,15 +3557,18 @@ function enviarAlertaViaGet(de, mensagem) {
     '&msg=' + encodeURIComponent(mensagem) +
     '&callback=' + cbName +
     '&t=' + Date.now();
+
   var script = document.createElement('script');
   script.src = url;
   script.onerror = function() {
     clearTimeout(timeout);
     delete window[cbName];
     enviarAlertaViaPost(de, mensagem);
+    showToast('⚠️ Erro de rede. Tente via POST.', 'error');
   };
   document.head.appendChild(script);
 }
+
 
 // Fallback: POST (original method)
 function enviarAlertaViaPost(de, mensagem) {
