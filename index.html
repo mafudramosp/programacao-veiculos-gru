@@ -3291,14 +3291,25 @@ function salvarPlatCard(rowId, destino, saida, dia) {
 // ===== ALERTAS BIDIRECIONAIS =====
 function sheetsGetAlertas(callback) {
   if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
-  const cbName = 'alertasCb_' + Date.now();
-  const timeout = setTimeout(() => { delete window[cbName]; }, 10000);
+  var cbName = 'alertasCb_' + Date.now();
+  var timeout = setTimeout(function() {
+    delete window[cbName];
+    // Don't call callback on timeout - just silently fail
+  }, 12000);
   window[cbName] = function(json) {
-    clearTimeout(timeout); delete window[cbName];
-    if (json.status === 'ok' && json.alertas) callback(json.alertas);
+    clearTimeout(timeout);
+    delete window[cbName];
+    if (json && json.status === 'ok' && json.alertas) {
+      callback(json.alertas);
+    }
   };
-  const script = document.createElement('script');
+  var script = document.createElement('script');
   script.src = APPS_SCRIPT_URL + '?action=alertas&callback=' + cbName + '&t=' + Date.now();
+  script.onerror = function() {
+    clearTimeout(timeout);
+    delete window[cbName];
+    // Network error - silently skip this poll cycle
+  };
   document.head.appendChild(script);
 }
 
@@ -3739,12 +3750,15 @@ document.addEventListener('click', e => {
 
 // Poll alerts every 30s if Sheets configured
 if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
-  // Poll every 15s for faster alert delivery (was 30s)
   setInterval(platPollAlertas, 10000);
   setInterval(planPollAlertas, 10000);
-  // Also poll immediately on load
-  setTimeout(platPollAlertas, 3000);
-  setTimeout(planPollAlertas, 3000);
+  setTimeout(platPollAlertas, 2000);
+  setTimeout(planPollAlertas, 2000);
+  // Reset ID sets every 2h to prevent memory bloat
+  setInterval(function() {
+    _shownPlatIds.clear();
+    _shownPlanIds.clear();
+  }, 7200000);
 }
 
 // ============================================================
