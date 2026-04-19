@@ -3314,12 +3314,19 @@ function sheetsGetAlertas(callback) {
 }
 
 
-// Track shown alert IDs (prevents duplicates across both polling functions)
-var _shownPlatIds = new Set();
-var _shownPlanIds = new Set();
+// Track shown alert IDs - persisted in localStorage so old alerts don't reappear
+var _shownPlatIds = new Set(JSON.parse(localStorage.getItem('pvg_shown_plat') || '[]'));
+var _shownPlanIds = new Set(JSON.parse(localStorage.getItem('pvg_shown_plan') || '[]'));
+
+function saveShownIds() {
+  // Keep only last 50 IDs to avoid localStorage bloat
+  var platArr = Array.from(_shownPlatIds).slice(-50);
+  var planArr = Array.from(_shownPlanIds).slice(-50);
+  localStorage.setItem('pvg_shown_plat', JSON.stringify(platArr));
+  localStorage.setItem('pvg_shown_plan', JSON.stringify(planArr));
+}
 
 function verificarAlertasPlanejamento(alertas) {
-  // Find ALL new alerts from planejamento (not just latest)
   var novos = alertas.filter(function(a) {
     return a.de === 'planejamento' && !_shownPlatIds.has(String(a.id));
   });
@@ -3327,6 +3334,13 @@ function verificarAlertasPlanejamento(alertas) {
     _shownPlatIds.add(String(a.id));
     showPlatAlert(a.msg, a.ts);
   });
+  if (novos.length > 0) saveShownIds();
+  // Also mark ALL current alerts as seen (even ones we don't show)
+  // so they never appear on next load
+  alertas.forEach(function(a) {
+    if (a.de === 'planejamento') _shownPlatIds.add(String(a.id));
+  });
+  saveShownIds();
 }
 
 function platPollAlertas() {
@@ -3474,13 +3488,18 @@ function planPollAlertas() {
   sheetsGetAlertas(function(alertas) {
     // Messages FROM plataforma → show in Planning panel
     var platMsgs = alertas.filter(function(a) { return a.de === 'plataforma'; });
+    var newPlanMsgs = false;
     platMsgs.forEach(function(m) {
       var mid = String(m.id);
       if (!_shownPlanIds.has(mid)) {
         _shownPlanIds.add(mid);
         addMsgPlataforma(m.msg, m.ts);
+        newPlanMsgs = true;
       }
     });
+    // Mark ALL as seen
+    platMsgs.forEach(function(m) { _shownPlanIds.add(String(m.id)); });
+    if (newPlanMsgs) saveShownIds();
     // Alerts FROM planejamento → show on Plataforma
     verificarAlertasPlanejamento(alertas);
   });
@@ -3754,11 +3773,8 @@ if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS && typeof APPS_SCRIPT_URL 
   setInterval(planPollAlertas, 10000);
   setTimeout(platPollAlertas, 2000);
   setTimeout(planPollAlertas, 2000);
-  // Reset ID sets every 2h to prevent memory bloat
-  setInterval(function() {
-    _shownPlatIds.clear();
-    _shownPlanIds.clear();
-  }, 7200000);
+  // Trim localStorage IDs every 2h to prevent bloat
+  setInterval(saveShownIds, 7200000);
 }
 
 // ============================================================
