@@ -2528,7 +2528,6 @@ function clearFilters() {
     var el = document.getElementById(ids[i]);
     if (el) el.value = '';
   }
-  
   var table = document.getElementById('tbody-prog');
   if (table) {
     var inputs = table.querySelectorAll('input, select');
@@ -2543,15 +2542,11 @@ function clearFilters() {
           var rowId = item.id.replace('ocup_', '');
           var bar = document.getElementById('bar_' + rowId);
           if (bar) { bar.style.width = '0%'; bar.style.background = '#9ca3af'; }
-          item.style.color = '#9ca3af';
-          item.style.borderColor = 'var(--border)';
+          item.style.color = '#9ca3af'; item.style.borderColor = 'var(--border)';
         }
       }
     }
   }
-  renderProg();
-  showToast('Campos e filtros limpos!', 'info');
-});
   renderProg();
 }
 
@@ -3343,27 +3338,24 @@ function salvarPlatCard(rowId, destino, saida, dia) {
 
 // ===== ALERTAS BIDIRECIONAIS =====
 
-function getAlertId(alerta) {
-  if (alerta.id && !isNaN(Number(alerta.id))) return Number(alerta.id);
-  if (alerta.ts) {
-    var m = String(alerta.ts).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+function getAlertId(a) {
+  if (a.id && !isNaN(Number(a.id))) return Number(a.id);
+  if (a.ts) {
+    var m = String(a.ts).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
     if (m) {
-      var dt = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], m[6] ? +m[6] : 0);
-      if (!isNaN(dt.getTime())) return dt.getTime();
+      var d = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], m[6] ? +m[6] : 0);
+      if (!isNaN(d.getTime())) return d.getTime();
     }
-    var d = new Date(alerta.ts);
-    if (!isNaN(d.getTime())) return d.getTime();
+    var d2 = new Date(a.ts);
+    if (!isNaN(d2.getTime())) return d2.getTime();
   }
-  var str = (alerta.de || '') + '|' + (alerta.msg || '') + '|' + (alerta.ts || '');
-  var hash = 0;
-  for (var i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
+  var s = (a.de || '') + (a.msg || '') + (a.ts || '');
+  var h = 0;
+  for (var i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
+  return Math.abs(h);
 }
-function getLastSeen(key) { return parseInt(localStorage.getItem(key) || '0'); }
-function setLastSeen(key, val) { localStorage.setItem(key, String(val)); }
+function getLastSeen(k) { return parseInt(localStorage.getItem(k) || '0'); }
+function setLastSeen(k, v) { localStorage.setItem(k, String(v)); }
 
 function sheetsGetAlertas(callback) {
   if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
@@ -3412,24 +3404,9 @@ function saveShownIds() {
 }
 
 function verificarAlertasPlanejamento(alertas) {
-  var planMsgs = alertas.filter(function(a) { return a.de === 'planejamento'; });
-  if (!planMsgs.length) return;
-  var lastSeen = getLastSeen('pvg_last_plat_seen');
-  var maxId = lastSeen;
-  if (lastSeen === 0) {
-    planMsgs.forEach(function(m) { var mid = getAlertId(m); if (mid > maxId) maxId = mid; });
-    setLastSeen('pvg_last_plat_seen', maxId);
-    return;
-  }
-  planMsgs.forEach(function(m) {
-    var mid = getAlertId(m);
-    if (mid > lastSeen) {
-      showPlatAlert(m.msg, m.ts);
-      if (mid > maxId) maxId = mid;
-    }
+  var novos = alertas.filter(function(a) {
+    return a.de === 'planejamento' && !hasShownPlat(a.id);
   });
-  if (maxId > lastSeen) setLastSeen('pvg_last_plat_seen', maxId);
-});
   novos.forEach(function(a) {
     addShownPlat(a.id);
     showPlatAlert(a.msg, a.ts);
@@ -3440,6 +3417,7 @@ function verificarAlertasPlanejamento(alertas) {
 function platPollAlertas() {
   sheetsGetAlertas(function(alertas) {
     if (!alertas) return;
+    // Update "last checked" indicator
     var el = document.getElementById('plat-last-check');
     if (el) {
       var n = new Date();
@@ -3447,10 +3425,7 @@ function platPollAlertas() {
       el.textContent = 'Verificado: ' + t + ' (' + alertas.length + ' alertas)';
     }
     verificarAlertasPlanejamento(alertas);
-  });
-}
-    verificarAlertasPlanejamento(alertas);
-    verificarMsgsPlataforma(alertas);
+    // verificarMsgsPlataforma(alertas);
   });
 }
 
@@ -3475,11 +3450,9 @@ function platPollManual() {
 var _pendingPlatAlert = null;
 
 function showPlatAlert(msg, ts) {
+  // Always show the panel regardless of which tab is active
+  // Store as pending too, in case user switches tabs later
   _pendingPlatAlert = { msg: msg, ts: ts };
-  if (typeof isMobile === 'function' && isMobile()) {
-    _showPlatAlertPanel(msg, ts);
-  }
-};
   _showPlatAlertPanel(msg, ts);
 
   // Add dot to plataforma tab nav button
@@ -3559,7 +3532,7 @@ function addMsgPlataforma(msg, ts) {
   const count = document.getElementById('plat-msgs-count');
   if (!panel || !list) return;
 
-  panel.style.display = 'block'; panel.style.setProperty('display', 'block', 'important');
+  panel.style.display = 'block';
   count.textContent = platMsgsList.length;
 
   list.innerHTML = platMsgsList.map(m =>
@@ -3599,22 +3572,13 @@ function escapeHtml(s) {
 function planPollAlertas() {
   sheetsGetAlertas(function(alertas) {
     if (!alertas) return;
-    verificarMsgsPlataforma(alertas);
+    // verificarMsgsPlataforma(alertas);
     verificarAlertasPlanejamento(alertas);
   });
 }
 
 function verificarMsgsPlataforma(alertas) {
   var platMsgs = alertas.filter(function(a) { return a.de === 'plataforma'; });
-  if (!platMsgs.length) return;
-  var naTela = Array.from(document.querySelectorAll('#plat-msgs-list .msg-item')).map(function(el) { return el.innerText; });
-  platMsgs.forEach(function(m) {
-    var jaEsta = naTela.some(function(txt) { return txt.includes(m.msg); });
-    if (!jaEsta) {
-      addMsgPlataforma(m.msg, m.ts);
-    }
-  });
-});
   if (!platMsgs.length) return;
 
   var lastSeen = getLastSeen('pvg_last_plan_seen');
