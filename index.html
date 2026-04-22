@@ -3403,20 +3403,10 @@ function saveShownIds() {
   localStorage.setItem('pvg_shown_plan', JSON.stringify(planArr));
 }
 
-var _alertasVistosNestaSessao = [];
 function verificarAlertasPlanejamento(alertas) {
-  var planMsgs = alertas.filter(function(a) { return a.de === 'planejamento'; });
-  if (!planMsgs.length) return;
-
-  planMsgs.forEach(function(m) {
-    var chaveUnica = m.msg + m.ts;
-    // Se nunca vimos essa mensagem nesta sessão (desde que abriu a página)
-    if (_alertasVistosNestaSessao.indexOf(chaveUnica) === -1) {
-      showPlatAlert(m.msg, m.ts);
-      _alertasVistosNestaSessao.push(chaveUnica);
-    }
+  var novos = alertas.filter(function(a) {
+    return a.de === 'planejamento' && !hasShownPlat(a.id);
   });
-});
   novos.forEach(function(a) {
     addShownPlat(a.id);
     showPlatAlert(a.msg, a.ts);
@@ -3460,9 +3450,11 @@ function platPollManual() {
 var _pendingPlatAlert = null;
 
 function showPlatAlert(msg, ts) {
-  // Always show the panel regardless of which tab is active
-  // Store as pending too, in case user switches tabs later
   _pendingPlatAlert = { msg: msg, ts: ts };
+  if (typeof isMobile === 'function' && isMobile()) {
+    _showPlatAlertPanel(msg, ts);
+  }
+};
   _showPlatAlertPanel(msg, ts);
 
   // Add dot to plataforma tab nav button
@@ -3589,21 +3581,6 @@ function planPollAlertas() {
 
 function verificarMsgsPlataforma(alertas) {
   var platMsgs = alertas.filter(function(a) { return a.de === 'plataforma'; });
-  if (!platMsgs.length) return;
-  
-  // Pega todas as mensagens que já estão aparecendo na tela agora
-  var lista = document.getElementById('plat-msgs-list');
-  var textoNaTela = lista ? lista.innerText : "";
-
-  platMsgs.forEach(function(m) {
-    // Se o texto da mensagem NÃO está na tela, adiciona ela imediatamente
-    if (textoNaTela.indexOf(m.msg) === -1) {
-      addMsgPlataforma(m.msg, m.ts);
-      // Atualiza o textoNaTela para não duplicar se houver duas iguais no mesmo lote
-      textoNaTela += m.msg;
-    }
-  });
-});
   if (!platMsgs.length) return;
 
   var lastSeen = getLastSeen('pvg_last_plan_seen');
