@@ -3490,10 +3490,13 @@ function platPollManual() {
 var _pendingPlatAlert = null;
 
 function showPlatAlert(msg, ts) {
-  // Always show the panel regardless of which tab is active
-  // Store as pending too, in case user switches tabs later
+  // Armazena como pendente para mostrar se o usuário alternar para a aba plataforma
   _pendingPlatAlert = { msg: msg, ts: ts };
-  _showPlatAlertPanel(msg, ts);
+  
+  // SÓ mostra o balão flutuante (banner lateral) se for dispositivo móvel
+  if (isMobile()) {
+    _showPlatAlertPanel(msg, ts);
+  }
 
   // Add dot to plataforma tab nav button
   var navBtn = document.getElementById('tab-plataforma');
