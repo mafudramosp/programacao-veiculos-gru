@@ -1730,10 +1730,6 @@ async function deleteFromSheets(id) {
 }
 
 function loadData() {
-  // Reset de segurança para mensagens da plataforma no PC
-  // Força o sistema a buscar mensagens da última hora ignorando o histórico do localStorage
-  localStorage.removeItem('pvg_last_plan_seen');
-  
   // Always show local cache immediately (fast startup)
   loadLocal();
   renderProg();
@@ -2528,10 +2524,34 @@ function closeEditModal(e) {
 // ===== CLEAR FILTERS =====
 function clearFilters() {
   var ids = ['search-prog', 'filter-tipo', 'filter-regiao', 'filter-dia'];
-  ids.forEach(function(id) {
-    var el = document.getElementById(id);
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById(ids[i]);
     if (el) el.value = '';
-  });
+  }
+  
+  var table = document.getElementById('tbody-prog');
+  if (table) {
+    var inputs = table.querySelectorAll('input, select');
+    for (var j = 0; j < inputs.length; j++) {
+      var item = inputs[j];
+      if (item.tagName === 'SELECT') {
+        if (item.id.indexOf('tipo_') === 0) item.value = 'Carro da Malha';
+        else item.selectedIndex = 0;
+      } else {
+        item.value = '';
+        if (item.id.indexOf('ocup_') === 0) {
+          var rowId = item.id.replace('ocup_', '');
+          var bar = document.getElementById('bar_' + rowId);
+          if (bar) { bar.style.width = '0%'; bar.style.background = '#9ca3af'; }
+          item.style.color = '#9ca3af';
+          item.style.borderColor = 'var(--border)';
+        }
+      }
+    }
+  }
+  renderProg();
+  showToast('Campos e filtros limpos!', 'info');
+});
   renderProg();
 }
 
@@ -3323,26 +3343,17 @@ function salvarPlatCard(rowId, destino, saida, dia) {
 
 // ===== ALERTAS BIDIRECIONAIS =====
 
-// ============================================================
-// FUNÇÕES AUXILIARES DE CONTROLE DE MENSAGENS
-// Estas funções estavam sendo chamadas mas nunca foram definidas,
-// causando erro "getLastSeen is not defined" e quebrando o polling.
-// ============================================================
 function getAlertId(alerta) {
-  // Gera um ID numérico único a partir do campo 'id' ou do timestamp
   if (alerta.id && !isNaN(Number(alerta.id))) return Number(alerta.id);
   if (alerta.ts) {
-    // Tenta formato BR: dd/mm/yyyy hh:mm:ss
     var m = String(alerta.ts).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
     if (m) {
       var dt = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], m[6] ? +m[6] : 0);
       if (!isNaN(dt.getTime())) return dt.getTime();
     }
-    // Tenta ISO
     var d = new Date(alerta.ts);
     if (!isNaN(d.getTime())) return d.getTime();
   }
-  // Fallback: hash da string da mensagem
   var str = (alerta.de || '') + '|' + (alerta.msg || '') + '|' + (alerta.ts || '');
   var hash = 0;
   for (var i = 0; i < str.length; i++) {
@@ -3351,15 +3362,8 @@ function getAlertId(alerta) {
   }
   return Math.abs(hash);
 }
-
-function getLastSeen(key) {
-  return parseInt(localStorage.getItem(key) || '0');
-}
-
-function setLastSeen(key, val) {
-  localStorage.setItem(key, String(val));
-}
-// ============================================================
+function getLastSeen(key) { return parseInt(localStorage.getItem(key) || '0'); }
+function setLastSeen(key, val) { localStorage.setItem(key, String(val)); }
 
 function sheetsGetAlertas(callback) {
   if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
@@ -3408,9 +3412,24 @@ function saveShownIds() {
 }
 
 function verificarAlertasPlanejamento(alertas) {
-  var novos = alertas.filter(function(a) {
-    return a.de === 'planejamento' && !hasShownPlat(a.id);
+  var planMsgs = alertas.filter(function(a) { return a.de === 'planejamento'; });
+  if (!planMsgs.length) return;
+  var lastSeen = getLastSeen('pvg_last_plat_seen');
+  var maxId = lastSeen;
+  if (lastSeen === 0) {
+    planMsgs.forEach(function(m) { var mid = getAlertId(m); if (mid > maxId) maxId = mid; });
+    setLastSeen('pvg_last_plat_seen', maxId);
+    return;
+  }
+  planMsgs.forEach(function(m) {
+    var mid = getAlertId(m);
+    if (mid > lastSeen) {
+      showPlatAlert(m.msg, m.ts);
+      if (mid > maxId) maxId = mid;
+    }
   });
+  if (maxId > lastSeen) setLastSeen('pvg_last_plat_seen', maxId);
+});
   novos.forEach(function(a) {
     addShownPlat(a.id);
     showPlatAlert(a.msg, a.ts);
@@ -3421,19 +3440,17 @@ function verificarAlertasPlanejamento(alertas) {
 function platPollAlertas() {
   sheetsGetAlertas(function(alertas) {
     if (!alertas) return;
-    // Update "last checked" indicator
     var el = document.getElementById('plat-last-check');
     if (el) {
       var n = new Date();
       var t = String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0') + ':' + String(n.getSeconds()).padStart(2,'0');
       el.textContent = 'Verificado: ' + t + ' (' + alertas.length + ' alertas)';
     }
-    // platPollAlertas roda na aba Plataforma (celular):
-    // verifica APENAS alertas vindos do Planejamento (de === 'planejamento')
     verificarAlertasPlanejamento(alertas);
-    // IMPORTANTE: NÃO chama verificarMsgsPlataforma aqui.
-    // verificarMsgsPlataforma é chamada SOMENTE por planPollAlertas (PC/Programação).
-    // Misturar as duas causava falha no controle de mensagens já vistas.
+  });
+}
+    verificarAlertasPlanejamento(alertas);
+    verificarMsgsPlataforma(alertas);
   });
 }
 
@@ -3458,9 +3475,11 @@ function platPollManual() {
 var _pendingPlatAlert = null;
 
 function showPlatAlert(msg, ts) {
-  // Always show the panel regardless of which tab is active
-  // Store as pending too, in case user switches tabs later
   _pendingPlatAlert = { msg: msg, ts: ts };
+  if (typeof isMobile === 'function' && isMobile()) {
+    _showPlatAlertPanel(msg, ts);
+  }
+};
   _showPlatAlertPanel(msg, ts);
 
   // Add dot to plataforma tab nav button
@@ -3540,10 +3559,7 @@ function addMsgPlataforma(msg, ts) {
   const count = document.getElementById('plat-msgs-count');
   if (!panel || !list) return;
 
-  panel.style.display = 'block';
-  panel.style.setProperty('display', 'block', 'important');
-  panel.style.opacity = '1';
-  panel.style.visibility = 'visible';
+  panel.style.display = 'block'; panel.style.setProperty('display', 'block', 'important');
   count.textContent = platMsgsList.length;
 
   list.innerHTML = platMsgsList.map(m =>
@@ -3591,31 +3607,25 @@ function planPollAlertas() {
 function verificarMsgsPlataforma(alertas) {
   var platMsgs = alertas.filter(function(a) { return a.de === 'plataforma'; });
   if (!platMsgs.length) return;
+  var naTela = Array.from(document.querySelectorAll('#plat-msgs-list .msg-item')).map(function(el) { return el.innerText; });
+  platMsgs.forEach(function(m) {
+    var jaEsta = naTela.some(function(txt) { return txt.includes(m.msg); });
+    if (!jaEsta) {
+      addMsgPlataforma(m.msg, m.ts);
+    }
+  });
+});
+  if (!platMsgs.length) return;
 
   var lastSeen = getLastSeen('pvg_last_plan_seen');
   var maxId = lastSeen;
 
-  // Se for o primeiro acesso (lastSeen === 0), vamos pegar mensagens da última 1 hora
-  // para o usuário não ver uma tela vazia se alguém acabou de mandar mensagem.
+  // First-time baseline: don't show old messages
   if (lastSeen === 0) {
-    var umaHoraAtras = Date.now() - (60 * 60 * 1000);
-    var iniciais = platMsgs
-      .map(function(m) { return { msg: m, id: getAlertId(m) }; })
-      .filter(function(x) { return x.id > umaHoraAtras; })
-      .sort(function(a, b) { return a.id - b.id; });
-
-    iniciais.forEach(function(x) {
-      addMsgPlataforma(x.msg.msg, x.msg.ts);
-      if (x.id > maxId) maxId = x.id;
+    platMsgs.forEach(function(m) {
+      var mid = getAlertId(m);
+      if (mid > maxId) maxId = mid;
     });
-    
-    // Se não tinha nada na última hora, apenas marca o ID da última mensagem existente
-    if (maxId === 0) {
-      platMsgs.forEach(function(m) {
-        var mid = getAlertId(m);
-        if (mid > maxId) maxId = mid;
-      });
-    }
     setLastSeen('pvg_last_plan_seen', maxId);
     return;
   }
@@ -3896,37 +3906,14 @@ document.addEventListener('click', e => {
   if (p && p.style.transform === 'translateY(0px)' && !p.contains(e.target) && !e.target.closest('[onclick*="abrirAlertPanel"]')) fecharAlertPanel();
 });
 
-// ============================================================
-// POLLING DE MENSAGENS — COMUNICAÇÃO ENTRE DISPOSITIVOS
-// Intervalo de 5s para melhor responsividade entre celular e PC.
-// Ambas as funções rodam em TODOS os dispositivos:
-//   - platPollAlertas: busca alertas Planejamento → Plataforma
-//   - planPollAlertas: busca mensagens Plataforma → Programação
-// ============================================================
+// Poll alerts every 30s if Sheets configured
 if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
-  // Polling a cada 5 segundos para ambas as direções
   setInterval(platPollAlertas, 5000);
   setInterval(planPollAlertas, 5000);
-
-  // Primeira verificação escalonada logo após o carregamento
-  setTimeout(function() { platPollAlertas(); }, 1500);
-  setTimeout(function() { planPollAlertas(); }, 2500);
-
+  setTimeout(platPollAlertas, 1500);
+  setTimeout(planPollAlertas, 1500);
   // Trim localStorage IDs every 2h to prevent bloat
   setInterval(saveShownIds, 7200000);
-
-  // RECONEXÃO AUTOMÁTICA: quando o usuário volta ao app/aba após
-  // ter ficado em segundo plano, dispara verificação imediata.
-  // Isso garante que mensagens enviadas enquanto a tela estava
-  // inativa apareçam assim que o usuário voltar.
-  document.addEventListener('visibilitychange', function() {
-    if (document.visibilityState === 'visible') {
-      setTimeout(function() {
-        platPollAlertas();
-        planPollAlertas();
-      }, 300);
-    }
-  });
 }
 
 // ============================================================
