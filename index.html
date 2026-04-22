@@ -809,77 +809,218 @@
 
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
-// --- SISTEMA DE COMUNICAÇÃO INSTANTÂNEA ---
-function getAlertId(a) {
-  if (a.id && !isNaN(Number(a.id))) return Number(a.id);
-  if (a.ts) {
-    var m = String(a.ts).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
-    if (m) {
-      var d = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], m[6] ? +m[6] : 0);
-      if (!isNaN(d.getTime())) return d.getTime();
-    }
-    var d2 = new Date(a.ts);
-    if (!isNaN(d2.getTime())) return d2.getTime();
-  }
-  var s = (a.de || '') + (a.msg || '') + (a.ts || '');
-  var h = 0;
-  for (var i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
-  return Math.abs(h);
-}
-function getLastSeen(k) { return parseInt(localStorage.getItem(k) || '0'); }
-function setLastSeen(k, v) { localStorage.setItem(k, String(v)); }
+// --- SISTEMA DE CHAT DIRETO (P2P) ---
+// Este sistema conecta o PC e o Celular diretamente sem passar pelo Google Sheets.
+// Não armazena histórico e é instantâneo.
 
-// Lógica de Sincronização Forçada (PC e Celular)
-var _mensagensExibidas = [];
+var peer = null;
+var conn = null;
+var CHAT_ROOM_ID = "pvg_gru_chat_room"; // ID único para sua empresa/sala
 
-function processarMensagensInstantaneas(alertas) {
-  if (!alertas || !alertas.length) return;
+function initDirectChat() {
+  // Cria um ID baseado no perfil para facilitar a conexão
+  // O PC (Planejamento) será o "servidor" e o Celular (Plataforma) o "cliente"
+  var myPeerId = isMobile() ? "pvg_celular_" + Date.now() : "pvg_pc_planejamento";
   
-  var listaPC = document.getElementById('plat-msgs-list');
-  var textoNaTelaPC = listaPC ? listaPC.innerText : "";
+  peer = new Peer(myPeerId, {
+    debug: 1
+  });
 
-  alertas.forEach(function(m) {
-    var chave = m.de + "|" + m.msg + "|" + m.ts;
-    
-    // Se a mensagem ainda não foi processada nesta sessão
-    if (_mensagensExibidas.indexOf(chave) === -1) {
-      
-      // 1. Se for mensagem da PLATAFORMA (Celular -> PC)
-      if (m.de === 'plataforma') {
-        // Se não estiver na lista do PC, adiciona
-        if (textoNaTelaPC.indexOf(m.msg) === -1) {
-          addMsgPlataforma(m.msg, m.ts);
-        }
-      }
-      
-      // 2. Se for mensagem do PLANEJAMENTO (PC -> Celular)
-      if (m.de === 'planejamento') {
-        // Mostra o alerta flutuante (apenas no celular via isMobile)
-        if (typeof isMobile === 'function' && isMobile()) {
-          showPlatAlert(m.msg, m.ts);
-        }
-      }
-      
-      _mensagensExibidas.push(chave);
+  peer.on('open', function(id) {
+    console.log('Meu ID no Chat Direto: ' + id);
+    if (isMobile()) {
+      // Se for celular, tenta conectar no PC
+      conectarAoPC();
     }
+  });
+
+  // Receber conexão (No PC)
+  peer.on('connection', function(c) {
+    conn = c;
+    setupChatHandlers();
+    showToast('Celular conectado ao Chat Direto!', 'success');
+  });
+
+  peer.on('error', function(err) {
+    console.error('Erro no Chat Direto:', err);
   });
 }
 
-// Sobrescrever as funções de polling originais para usar a nova lógica unificada
-platPollAlertas = function() {
-  sheetsGetAlertas(function(alertas) {
-    processarMensagensInstantaneas(alertas);
-    var el = document.getElementById('plat-last-check');
-    if (el) {
-      var n = new Date();
-      var t = String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0') + ':' + String(n.getSeconds()).padStart(2,'0');
-      el.textContent = 'Sincronizado: ' + t;
+function conectarAoPC() {
+  conn = peer.connect("pvg_pc_planejamento", {
+    reliable: true
+  });
+  conn.on('open', function() {
+    setupChatHandlers();
+    showToast('Conectado ao PC com sucesso!', 'success');
+  });
+}
+
+function setupChatHandlers() {
+  conn.on('data', function(data) {
+    // Recebeu mensagem do outro lado
+    if (data.type === 'msg') {
+      if (isMobile()) {
+        // Celular recebeu do PC
+        showPlatAlert(data.msg, data.ts);
+      } else {
+        // PC recebeu do Celular
+        addMsgPlataforma(data.msg, data.ts);
+      }
     }
   });
+  
+  conn.on('close', function() {
+    showToast('Conexão de chat perdida. Tentando reconectar...', 'warning');
+    if (isMobile()) setTimeout(conectarAoPC, 3000);
+  });
+}
+
+// Sobrescrever a função de enviar mensagem para usar o Chat Direto
+// 1. Enviar do PC para o Celular (Alerta Plataforma)
+var _orig_enviarAlertaPlataforma = enviarAlertaPlataforma;
+enviarAlertaPlataforma = function() {
+  var msg = document.getElementById('plat-alert-msg').value;
+  if (!msg) return;
+  var ts = new Date().toLocaleString('pt-BR');
+  
+  if (conn && conn.open) {
+    conn.send({ type: 'msg', msg: msg, ts: ts });
+    fecharAlertPanel();
+    showToast('Mensagem enviada instantaneamente!', 'success');
+  } else {
+    // Se não houver conexão direta, avisa o usuário
+    showToast('Celular não está conectado no momento.', 'error');
+  }
 };
 
-planPollAlertas = platPollAlertas; // Ambos usam a mesma lógica de sincronização
+// 2. Enviar do Celular para o PC (Resposta/Mensagem)
+var _orig_enviarMsgPlataforma = enviarMsgPlataforma;
+enviarMsgPlataforma = function() {
+  var input = document.getElementById('plat-msg-input');
+  var msg = input.value;
+  if (!msg) return;
+  var ts = new Date().toLocaleString('pt-BR');
 
+  if (conn && conn.open) {
+    conn.send({ type: 'msg', msg: msg, ts: ts });
+    input.value = '';
+    showToast('Mensagem enviada ao PC!', 'success');
+  } else {
+    showToast('PC não está conectado no momento.', 'error');
+  }
+};
+
+// Iniciar o chat ao carregar a página
+setTimeout(initDirectChat, 2000);
+// ------------------------------------------
+
+</script>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js">
+// --- SISTEMA DE CHAT DIRETO (P2P) ---
+// Este sistema conecta o PC e o Celular diretamente sem passar pelo Google Sheets.
+// Não armazena histórico e é instantâneo.
+
+var peer = null;
+var conn = null;
+var CHAT_ROOM_ID = "pvg_gru_chat_room"; // ID único para sua empresa/sala
+
+function initDirectChat() {
+  // Cria um ID baseado no perfil para facilitar a conexão
+  // O PC (Planejamento) será o "servidor" e o Celular (Plataforma) o "cliente"
+  var myPeerId = isMobile() ? "pvg_celular_" + Date.now() : "pvg_pc_planejamento";
+  
+  peer = new Peer(myPeerId, {
+    debug: 1
+  });
+
+  peer.on('open', function(id) {
+    console.log('Meu ID no Chat Direto: ' + id);
+    if (isMobile()) {
+      // Se for celular, tenta conectar no PC
+      conectarAoPC();
+    }
+  });
+
+  // Receber conexão (No PC)
+  peer.on('connection', function(c) {
+    conn = c;
+    setupChatHandlers();
+    showToast('Celular conectado ao Chat Direto!', 'success');
+  });
+
+  peer.on('error', function(err) {
+    console.error('Erro no Chat Direto:', err);
+  });
+}
+
+function conectarAoPC() {
+  conn = peer.connect("pvg_pc_planejamento", {
+    reliable: true
+  });
+  conn.on('open', function() {
+    setupChatHandlers();
+    showToast('Conectado ao PC com sucesso!', 'success');
+  });
+}
+
+function setupChatHandlers() {
+  conn.on('data', function(data) {
+    // Recebeu mensagem do outro lado
+    if (data.type === 'msg') {
+      if (isMobile()) {
+        // Celular recebeu do PC
+        showPlatAlert(data.msg, data.ts);
+      } else {
+        // PC recebeu do Celular
+        addMsgPlataforma(data.msg, data.ts);
+      }
+    }
+  });
+  
+  conn.on('close', function() {
+    showToast('Conexão de chat perdida. Tentando reconectar...', 'warning');
+    if (isMobile()) setTimeout(conectarAoPC, 3000);
+  });
+}
+
+// Sobrescrever a função de enviar mensagem para usar o Chat Direto
+// 1. Enviar do PC para o Celular (Alerta Plataforma)
+var _orig_enviarAlertaPlataforma = enviarAlertaPlataforma;
+enviarAlertaPlataforma = function() {
+  var msg = document.getElementById('plat-alert-msg').value;
+  if (!msg) return;
+  var ts = new Date().toLocaleString('pt-BR');
+  
+  if (conn && conn.open) {
+    conn.send({ type: 'msg', msg: msg, ts: ts });
+    fecharAlertPanel();
+    showToast('Mensagem enviada instantaneamente!', 'success');
+  } else {
+    // Se não houver conexão direta, avisa o usuário
+    showToast('Celular não está conectado no momento.', 'error');
+  }
+};
+
+// 2. Enviar do Celular para o PC (Resposta/Mensagem)
+var _orig_enviarMsgPlataforma = enviarMsgPlataforma;
+enviarMsgPlataforma = function() {
+  var input = document.getElementById('plat-msg-input');
+  var msg = input.value;
+  if (!msg) return;
+  var ts = new Date().toLocaleString('pt-BR');
+
+  if (conn && conn.open) {
+    conn.send({ type: 'msg', msg: msg, ts: ts });
+    input.value = '';
+    showToast('Mensagem enviada ao PC!', 'success');
+  } else {
+    showToast('PC não está conectado no momento.', 'error');
+  }
+};
+
+// Iniciar o chat ao carregar a página
+setTimeout(initDirectChat, 2000);
 // ------------------------------------------
 
 </script>
@@ -1585,77 +1726,110 @@ planPollAlertas = platPollAlertas; // Ambos usam a mesma lógica de sincronizaç
 <div class="toast" id="toast"></div>
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js" defer>
-// --- SISTEMA DE COMUNICAÇÃO INSTANTÂNEA ---
-function getAlertId(a) {
-  if (a.id && !isNaN(Number(a.id))) return Number(a.id);
-  if (a.ts) {
-    var m = String(a.ts).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
-    if (m) {
-      var d = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], m[6] ? +m[6] : 0);
-      if (!isNaN(d.getTime())) return d.getTime();
-    }
-    var d2 = new Date(a.ts);
-    if (!isNaN(d2.getTime())) return d2.getTime();
-  }
-  var s = (a.de || '') + (a.msg || '') + (a.ts || '');
-  var h = 0;
-  for (var i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
-  return Math.abs(h);
-}
-function getLastSeen(k) { return parseInt(localStorage.getItem(k) || '0'); }
-function setLastSeen(k, v) { localStorage.setItem(k, String(v)); }
+// --- SISTEMA DE CHAT DIRETO (P2P) ---
+// Este sistema conecta o PC e o Celular diretamente sem passar pelo Google Sheets.
+// Não armazena histórico e é instantâneo.
 
-// Lógica de Sincronização Forçada (PC e Celular)
-var _mensagensExibidas = [];
+var peer = null;
+var conn = null;
+var CHAT_ROOM_ID = "pvg_gru_chat_room"; // ID único para sua empresa/sala
 
-function processarMensagensInstantaneas(alertas) {
-  if (!alertas || !alertas.length) return;
+function initDirectChat() {
+  // Cria um ID baseado no perfil para facilitar a conexão
+  // O PC (Planejamento) será o "servidor" e o Celular (Plataforma) o "cliente"
+  var myPeerId = isMobile() ? "pvg_celular_" + Date.now() : "pvg_pc_planejamento";
   
-  var listaPC = document.getElementById('plat-msgs-list');
-  var textoNaTelaPC = listaPC ? listaPC.innerText : "";
+  peer = new Peer(myPeerId, {
+    debug: 1
+  });
 
-  alertas.forEach(function(m) {
-    var chave = m.de + "|" + m.msg + "|" + m.ts;
-    
-    // Se a mensagem ainda não foi processada nesta sessão
-    if (_mensagensExibidas.indexOf(chave) === -1) {
-      
-      // 1. Se for mensagem da PLATAFORMA (Celular -> PC)
-      if (m.de === 'plataforma') {
-        // Se não estiver na lista do PC, adiciona
-        if (textoNaTelaPC.indexOf(m.msg) === -1) {
-          addMsgPlataforma(m.msg, m.ts);
-        }
-      }
-      
-      // 2. Se for mensagem do PLANEJAMENTO (PC -> Celular)
-      if (m.de === 'planejamento') {
-        // Mostra o alerta flutuante (apenas no celular via isMobile)
-        if (typeof isMobile === 'function' && isMobile()) {
-          showPlatAlert(m.msg, m.ts);
-        }
-      }
-      
-      _mensagensExibidas.push(chave);
+  peer.on('open', function(id) {
+    console.log('Meu ID no Chat Direto: ' + id);
+    if (isMobile()) {
+      // Se for celular, tenta conectar no PC
+      conectarAoPC();
     }
+  });
+
+  // Receber conexão (No PC)
+  peer.on('connection', function(c) {
+    conn = c;
+    setupChatHandlers();
+    showToast('Celular conectado ao Chat Direto!', 'success');
+  });
+
+  peer.on('error', function(err) {
+    console.error('Erro no Chat Direto:', err);
   });
 }
 
-// Sobrescrever as funções de polling originais para usar a nova lógica unificada
-platPollAlertas = function() {
-  sheetsGetAlertas(function(alertas) {
-    processarMensagensInstantaneas(alertas);
-    var el = document.getElementById('plat-last-check');
-    if (el) {
-      var n = new Date();
-      var t = String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0') + ':' + String(n.getSeconds()).padStart(2,'0');
-      el.textContent = 'Sincronizado: ' + t;
+function conectarAoPC() {
+  conn = peer.connect("pvg_pc_planejamento", {
+    reliable: true
+  });
+  conn.on('open', function() {
+    setupChatHandlers();
+    showToast('Conectado ao PC com sucesso!', 'success');
+  });
+}
+
+function setupChatHandlers() {
+  conn.on('data', function(data) {
+    // Recebeu mensagem do outro lado
+    if (data.type === 'msg') {
+      if (isMobile()) {
+        // Celular recebeu do PC
+        showPlatAlert(data.msg, data.ts);
+      } else {
+        // PC recebeu do Celular
+        addMsgPlataforma(data.msg, data.ts);
+      }
     }
   });
+  
+  conn.on('close', function() {
+    showToast('Conexão de chat perdida. Tentando reconectar...', 'warning');
+    if (isMobile()) setTimeout(conectarAoPC, 3000);
+  });
+}
+
+// Sobrescrever a função de enviar mensagem para usar o Chat Direto
+// 1. Enviar do PC para o Celular (Alerta Plataforma)
+var _orig_enviarAlertaPlataforma = enviarAlertaPlataforma;
+enviarAlertaPlataforma = function() {
+  var msg = document.getElementById('plat-alert-msg').value;
+  if (!msg) return;
+  var ts = new Date().toLocaleString('pt-BR');
+  
+  if (conn && conn.open) {
+    conn.send({ type: 'msg', msg: msg, ts: ts });
+    fecharAlertPanel();
+    showToast('Mensagem enviada instantaneamente!', 'success');
+  } else {
+    // Se não houver conexão direta, avisa o usuário
+    showToast('Celular não está conectado no momento.', 'error');
+  }
 };
 
-planPollAlertas = platPollAlertas; // Ambos usam a mesma lógica de sincronização
+// 2. Enviar do Celular para o PC (Resposta/Mensagem)
+var _orig_enviarMsgPlataforma = enviarMsgPlataforma;
+enviarMsgPlataforma = function() {
+  var input = document.getElementById('plat-msg-input');
+  var msg = input.value;
+  if (!msg) return;
+  var ts = new Date().toLocaleString('pt-BR');
 
+  if (conn && conn.open) {
+    conn.send({ type: 'msg', msg: msg, ts: ts });
+    input.value = '';
+    showToast('Mensagem enviada ao PC!', 'success');
+  } else {
+    showToast('PC não está conectado no momento.', 'error');
+  }
+};
+
+// Iniciar o chat ao carregar a página
+setTimeout(initDirectChat, 2000);
 // ------------------------------------------
 
 </script><script>
@@ -3641,7 +3815,7 @@ function addMsgPlataforma(msg, ts) {
   const count = document.getElementById('plat-msgs-count');
   if (!panel || !list) return;
 
-  panel.style.display = 'block'; panel.style.setProperty('display', 'block', 'important');
+  panel.style.display = 'block';
   count.textContent = platMsgsList.length;
 
   list.innerHTML = platMsgsList.map(m =>
@@ -3981,8 +4155,8 @@ document.addEventListener('click', e => {
 
 // Poll alerts every 30s if Sheets configured
 if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
-  setInterval(platPollAlertas, 4000);
-  setInterval(planPollAlertas, 4000);
+  // Polling desativado - Usando Chat Direto P2P
+  // Polling desativado - Usando Chat Direto P2P
   setTimeout(platPollAlertas, 1500);
   setTimeout(planPollAlertas, 1500);
   // Trim localStorage IDs every 2h to prevent bloat
@@ -4239,7 +4413,115 @@ function imprimirProgramados() {
 
   var printHTML = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'
     + '<title>Programados GRU - ' + hoje + '</title>'
-    + '<style>' + css + '</style></head><body>'
+    + '<style>' + css + '</style><script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js">
+// --- SISTEMA DE CHAT DIRETO (P2P) ---
+// Este sistema conecta o PC e o Celular diretamente sem passar pelo Google Sheets.
+// Não armazena histórico e é instantâneo.
+
+var peer = null;
+var conn = null;
+var CHAT_ROOM_ID = "pvg_gru_chat_room"; // ID único para sua empresa/sala
+
+function initDirectChat() {
+  // Cria um ID baseado no perfil para facilitar a conexão
+  // O PC (Planejamento) será o "servidor" e o Celular (Plataforma) o "cliente"
+  var myPeerId = isMobile() ? "pvg_celular_" + Date.now() : "pvg_pc_planejamento";
+  
+  peer = new Peer(myPeerId, {
+    debug: 1
+  });
+
+  peer.on('open', function(id) {
+    console.log('Meu ID no Chat Direto: ' + id);
+    if (isMobile()) {
+      // Se for celular, tenta conectar no PC
+      conectarAoPC();
+    }
+  });
+
+  // Receber conexão (No PC)
+  peer.on('connection', function(c) {
+    conn = c;
+    setupChatHandlers();
+    showToast('Celular conectado ao Chat Direto!', 'success');
+  });
+
+  peer.on('error', function(err) {
+    console.error('Erro no Chat Direto:', err);
+  });
+}
+
+function conectarAoPC() {
+  conn = peer.connect("pvg_pc_planejamento", {
+    reliable: true
+  });
+  conn.on('open', function() {
+    setupChatHandlers();
+    showToast('Conectado ao PC com sucesso!', 'success');
+  });
+}
+
+function setupChatHandlers() {
+  conn.on('data', function(data) {
+    // Recebeu mensagem do outro lado
+    if (data.type === 'msg') {
+      if (isMobile()) {
+        // Celular recebeu do PC
+        showPlatAlert(data.msg, data.ts);
+      } else {
+        // PC recebeu do Celular
+        addMsgPlataforma(data.msg, data.ts);
+      }
+    }
+  });
+  
+  conn.on('close', function() {
+    showToast('Conexão de chat perdida. Tentando reconectar...', 'warning');
+    if (isMobile()) setTimeout(conectarAoPC, 3000);
+  });
+}
+
+// Sobrescrever a função de enviar mensagem para usar o Chat Direto
+// 1. Enviar do PC para o Celular (Alerta Plataforma)
+var _orig_enviarAlertaPlataforma = enviarAlertaPlataforma;
+enviarAlertaPlataforma = function() {
+  var msg = document.getElementById('plat-alert-msg').value;
+  if (!msg) return;
+  var ts = new Date().toLocaleString('pt-BR');
+  
+  if (conn && conn.open) {
+    conn.send({ type: 'msg', msg: msg, ts: ts });
+    fecharAlertPanel();
+    showToast('Mensagem enviada instantaneamente!', 'success');
+  } else {
+    // Se não houver conexão direta, avisa o usuário
+    showToast('Celular não está conectado no momento.', 'error');
+  }
+};
+
+// 2. Enviar do Celular para o PC (Resposta/Mensagem)
+var _orig_enviarMsgPlataforma = enviarMsgPlataforma;
+enviarMsgPlataforma = function() {
+  var input = document.getElementById('plat-msg-input');
+  var msg = input.value;
+  if (!msg) return;
+  var ts = new Date().toLocaleString('pt-BR');
+
+  if (conn && conn.open) {
+    conn.send({ type: 'msg', msg: msg, ts: ts });
+    input.value = '';
+    showToast('Mensagem enviada ao PC!', 'success');
+  } else {
+    showToast('PC não está conectado no momento.', 'error');
+  }
+};
+
+// Iniciar o chat ao carregar a página
+setTimeout(initDirectChat, 2000);
+// ------------------------------------------
+
+</script>
+</head><body>'
     + '<div class="header"><div>'
     + '<div class="title">Programacao de Veiculos OPL - GRU</div>'
     + '<div class="sub">TRAGETTA TRANSPORTES - GUARULHOS</div>'
@@ -4300,77 +4582,110 @@ window.addEventListener('appinstalled', function() {
 
 
 
-// --- SISTEMA DE COMUNICAÇÃO INSTANTÂNEA ---
-function getAlertId(a) {
-  if (a.id && !isNaN(Number(a.id))) return Number(a.id);
-  if (a.ts) {
-    var m = String(a.ts).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
-    if (m) {
-      var d = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], m[6] ? +m[6] : 0);
-      if (!isNaN(d.getTime())) return d.getTime();
-    }
-    var d2 = new Date(a.ts);
-    if (!isNaN(d2.getTime())) return d2.getTime();
-  }
-  var s = (a.de || '') + (a.msg || '') + (a.ts || '');
-  var h = 0;
-  for (var i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
-  return Math.abs(h);
-}
-function getLastSeen(k) { return parseInt(localStorage.getItem(k) || '0'); }
-function setLastSeen(k, v) { localStorage.setItem(k, String(v)); }
+// --- SISTEMA DE CHAT DIRETO (P2P) ---
+// Este sistema conecta o PC e o Celular diretamente sem passar pelo Google Sheets.
+// Não armazena histórico e é instantâneo.
 
-// Lógica de Sincronização Forçada (PC e Celular)
-var _mensagensExibidas = [];
+var peer = null;
+var conn = null;
+var CHAT_ROOM_ID = "pvg_gru_chat_room"; // ID único para sua empresa/sala
 
-function processarMensagensInstantaneas(alertas) {
-  if (!alertas || !alertas.length) return;
+function initDirectChat() {
+  // Cria um ID baseado no perfil para facilitar a conexão
+  // O PC (Planejamento) será o "servidor" e o Celular (Plataforma) o "cliente"
+  var myPeerId = isMobile() ? "pvg_celular_" + Date.now() : "pvg_pc_planejamento";
   
-  var listaPC = document.getElementById('plat-msgs-list');
-  var textoNaTelaPC = listaPC ? listaPC.innerText : "";
+  peer = new Peer(myPeerId, {
+    debug: 1
+  });
 
-  alertas.forEach(function(m) {
-    var chave = m.de + "|" + m.msg + "|" + m.ts;
-    
-    // Se a mensagem ainda não foi processada nesta sessão
-    if (_mensagensExibidas.indexOf(chave) === -1) {
-      
-      // 1. Se for mensagem da PLATAFORMA (Celular -> PC)
-      if (m.de === 'plataforma') {
-        // Se não estiver na lista do PC, adiciona
-        if (textoNaTelaPC.indexOf(m.msg) === -1) {
-          addMsgPlataforma(m.msg, m.ts);
-        }
-      }
-      
-      // 2. Se for mensagem do PLANEJAMENTO (PC -> Celular)
-      if (m.de === 'planejamento') {
-        // Mostra o alerta flutuante (apenas no celular via isMobile)
-        if (typeof isMobile === 'function' && isMobile()) {
-          showPlatAlert(m.msg, m.ts);
-        }
-      }
-      
-      _mensagensExibidas.push(chave);
+  peer.on('open', function(id) {
+    console.log('Meu ID no Chat Direto: ' + id);
+    if (isMobile()) {
+      // Se for celular, tenta conectar no PC
+      conectarAoPC();
     }
+  });
+
+  // Receber conexão (No PC)
+  peer.on('connection', function(c) {
+    conn = c;
+    setupChatHandlers();
+    showToast('Celular conectado ao Chat Direto!', 'success');
+  });
+
+  peer.on('error', function(err) {
+    console.error('Erro no Chat Direto:', err);
   });
 }
 
-// Sobrescrever as funções de polling originais para usar a nova lógica unificada
-platPollAlertas = function() {
-  sheetsGetAlertas(function(alertas) {
-    processarMensagensInstantaneas(alertas);
-    var el = document.getElementById('plat-last-check');
-    if (el) {
-      var n = new Date();
-      var t = String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0') + ':' + String(n.getSeconds()).padStart(2,'0');
-      el.textContent = 'Sincronizado: ' + t;
+function conectarAoPC() {
+  conn = peer.connect("pvg_pc_planejamento", {
+    reliable: true
+  });
+  conn.on('open', function() {
+    setupChatHandlers();
+    showToast('Conectado ao PC com sucesso!', 'success');
+  });
+}
+
+function setupChatHandlers() {
+  conn.on('data', function(data) {
+    // Recebeu mensagem do outro lado
+    if (data.type === 'msg') {
+      if (isMobile()) {
+        // Celular recebeu do PC
+        showPlatAlert(data.msg, data.ts);
+      } else {
+        // PC recebeu do Celular
+        addMsgPlataforma(data.msg, data.ts);
+      }
     }
   });
+  
+  conn.on('close', function() {
+    showToast('Conexão de chat perdida. Tentando reconectar...', 'warning');
+    if (isMobile()) setTimeout(conectarAoPC, 3000);
+  });
+}
+
+// Sobrescrever a função de enviar mensagem para usar o Chat Direto
+// 1. Enviar do PC para o Celular (Alerta Plataforma)
+var _orig_enviarAlertaPlataforma = enviarAlertaPlataforma;
+enviarAlertaPlataforma = function() {
+  var msg = document.getElementById('plat-alert-msg').value;
+  if (!msg) return;
+  var ts = new Date().toLocaleString('pt-BR');
+  
+  if (conn && conn.open) {
+    conn.send({ type: 'msg', msg: msg, ts: ts });
+    fecharAlertPanel();
+    showToast('Mensagem enviada instantaneamente!', 'success');
+  } else {
+    // Se não houver conexão direta, avisa o usuário
+    showToast('Celular não está conectado no momento.', 'error');
+  }
 };
 
-planPollAlertas = platPollAlertas; // Ambos usam a mesma lógica de sincronização
+// 2. Enviar do Celular para o PC (Resposta/Mensagem)
+var _orig_enviarMsgPlataforma = enviarMsgPlataforma;
+enviarMsgPlataforma = function() {
+  var input = document.getElementById('plat-msg-input');
+  var msg = input.value;
+  if (!msg) return;
+  var ts = new Date().toLocaleString('pt-BR');
 
+  if (conn && conn.open) {
+    conn.send({ type: 'msg', msg: msg, ts: ts });
+    input.value = '';
+    showToast('Mensagem enviada ao PC!', 'success');
+  } else {
+    showToast('PC não está conectado no momento.', 'error');
+  }
+};
+
+// Iniciar o chat ao carregar a página
+setTimeout(initDirectChat, 2000);
 // ------------------------------------------
 
 </script>
