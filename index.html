@@ -1314,9 +1314,14 @@
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
         <div class="plat-day-badge" id="plat-day-badge">—</div>
+        <div style="display:flex;gap:4px">
         <button onclick="platPollManual()" style="background:rgba(255,255,255,.08);color:#9ca3af;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:3px 10px;font-size:10px;font-family:'Poppins',sans-serif;cursor:pointer" title="Verificar alertas agora">
           ↻ Verificar alertas
         </button>
+        <button onclick="resetarAlertas()" style="background:rgba(239,68,68,.1);color:#f87171;border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:3px 10px;font-size:10px;font-family:'Poppins',sans-serif;cursor:pointer" title="Limpar histórico de alertas vistos">
+          ↺ Reset
+        </button>
+        </div>
         <div id="plat-last-check" style="font-size:9px;color:#4b5563;margin-top:2px">Aguardando...</div>
       </div>
     </div>
@@ -2518,10 +2523,11 @@ function closeEditModal(e) {
 
 // ===== CLEAR FILTERS =====
 function clearFilters() {
-  document.getElementById('search-prog').value = '';
-  document.getElementById('filter-tipo').value = '';
-  document.getElementById('filter-regiao').value = '';
-  document.getElementById('filter-dia').value = '';
+  var ids = ['search-prog', 'filter-tipo', 'filter-regiao', 'filter-dia'];
+  ids.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
   renderProg();
 }
 
@@ -3371,13 +3377,28 @@ function verificarAlertasPlanejamento(alertas) {
 
 function platPollAlertas() {
   sheetsGetAlertas(function(alertas) {
-    // Update "last checked" timestamp
+    if (!alertas) return;
+    // Update "last checked" indicator
     var el = document.getElementById('plat-last-check');
-    var now = new Date();
-    var t = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
-    if (el) el.textContent = 'Verificado: ' + t + ' (' + (alertas ? alertas.length : 0) + ' alertas)';
+    if (el) {
+      var n = new Date();
+      var t = String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0') + ':' + String(n.getSeconds()).padStart(2,'0');
+      el.textContent = 'Verificado: ' + t + ' (' + alertas.length + ' alertas)';
+    }
     verificarAlertasPlanejamento(alertas);
+    verificarMsgsPlataforma(alertas);
   });
+}
+
+function resetarAlertas() {
+  if (!confirm('Limpar histórico de alertas vistos? Alertas antigos podem reaparecer na próxima verificação.')) return;
+  localStorage.removeItem('pvg_last_plat_seen');
+  localStorage.removeItem('pvg_last_plan_seen');
+  // Legacy keys too
+  localStorage.removeItem('pvg_shown_plat');
+  localStorage.removeItem('pvg_shown_plan');
+  showToast('✅ Histórico resetado. Alertas virão nas próximas verificações.', 'success');
+  setTimeout(platPollAlertas, 500);
 }
 
 function platPollManual() {
@@ -3510,24 +3531,43 @@ function escapeHtml(s) {
 }
 
 function planPollAlertas() {
-  // Shared poll - checks both directions
   sheetsGetAlertas(function(alertas) {
-    // Messages FROM plataforma → show in Planning panel
-    var platMsgs = alertas.filter(function(a) { return a.de === 'plataforma'; });
-    var newPlanMsgs = false;
-    platMsgs.forEach(function(m) {
-      var mid = String(m.id);
-      if (!hasShownPlan(m.id)) {
-        addShownPlan(m.id);
-        addMsgPlataforma(m.msg, m.ts);
-        newPlanMsgs = true;
-      }
-    });
-    if (newPlanMsgs) saveShownIds();
-    // Alerts FROM planejamento → show on Plataforma
+    if (!alertas) return;
+    verificarMsgsPlataforma(alertas);
     verificarAlertasPlanejamento(alertas);
   });
 }
+
+function verificarMsgsPlataforma(alertas) {
+  var platMsgs = alertas.filter(function(a) { return a.de === 'plataforma'; });
+  if (!platMsgs.length) return;
+
+  var lastSeen = getLastSeen('pvg_last_plan_seen');
+  var maxId = lastSeen;
+
+  // First-time baseline: don't show old messages
+  if (lastSeen === 0) {
+    platMsgs.forEach(function(m) {
+      var mid = getAlertId(m);
+      if (mid > maxId) maxId = mid;
+    });
+    setLastSeen('pvg_last_plan_seen', maxId);
+    return;
+  }
+
+  var novos = platMsgs
+    .map(function(m) { return { msg: m, id: getAlertId(m) }; })
+    .filter(function(x) { return x.id > lastSeen; })
+    .sort(function(a, b) { return a.id - b.id; });
+
+  novos.forEach(function(x) {
+    addMsgPlataforma(x.msg.msg, x.msg.ts);
+    if (x.id > maxId) maxId = x.id;
+  });
+
+  if (maxId > lastSeen) setLastSeen('pvg_last_plan_seen', maxId);
+}
+
 
 // ============================================================
 // SISTEMA DE ALERTA SONORO + VIBRAÇÃO
@@ -3981,110 +4021,103 @@ window.addEventListener('resize', function() {
 
 // ===== IMPRIMIR PROGRAMADOS =====
 function imprimirProgramados() {
-  // Get filtered data
-  const dataFiltro = document.getElementById('filter-prog2-data')?.value || '';
-  const search = document.getElementById('search-prog2')?.value || '';
-  const tipo = document.getElementById('filter-prog2-tipo')?.value || '';
+  // Always print TODAY's data only
+  var hoje = getDataHoje();
+  var diaHoje = getDiaHoje();
 
-  let data = progData.filter(r => {
+  var data = progData.filter(function(r) {
     if (!r.frota && !r.ocup) return false;
-    if (tipo && r.tipo !== tipo) return false;
-    if (search) {
-      const s = (r.destino + r.frota + r.composicao + r.obs + r.dia).toLowerCase();
-      if (!s.includes(search.toLowerCase())) return false;
-    }
-    if (dataFiltro) {
-      const recDate = parseDateBR(r.gerado);
-      if (!recDate) return false;
-      const parts = dataFiltro.split('-').map(Number);
-      if (recDate.getFullYear() !== parts[0] || recDate.getMonth()+1 !== parts[1] || recDate.getDate() !== parts[2]) return false;
+    // Check if gerado is today
+    if (r.gerado) {
+      var geradoDate = r.gerado.substring(0, 10); // dd/MM/yyyy
+      if (geradoDate !== hoje) return false;
     }
     return true;
   });
-  data.sort((a, b) => (a.saida || '').localeCompare(b.saida || ''));
 
-  if (!data.length) { showToast('Nenhum registro para imprimir', 'error'); return; }
+  data.sort(function(a, b) { return (a.saida || '').localeCompare(b.saida || ''); });
 
-  const dataLabel = dataFiltro ? dataFiltro.split('-').reverse().join('/') : getDataHoje();
-  const cheios = data.filter(r => r.ocup >= 1).length;
-  const total = data.length;
+  if (!data.length) {
+    showToast('Nenhum registro para hoje (' + hoje + ')', 'error');
+    return;
+  }
 
-  const rows = data.map((r, i) => {
-    const pct = Math.round((r.ocup || 0) * 100);
-    const barColor = pct >= 100 ? '#16a34a' : pct >= 71 ? '#65a30d' : pct >= 51 ? '#ca8a04' : pct >= 31 ? '#ea580c' : pct > 0 ? '#dc2626' : '#e5e7eb';
-    return `<tr>
-      <td>${i+1}</td>
-      <td>${r.gerado || '—'}</td>
-      <td><span style="background:${r.tipo==='Carro da Malha'?'rgba(0,178,0,.1)':r.tipo==='Carro Extra'?'rgba(234,88,12,.1)':'rgba(220,38,38,.1)'}; color:${r.tipo==='Carro da Malha'?'#15803d':r.tipo==='Carro Extra'?'#ea580c':'#dc2626'}; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700">${r.tipo === 'Carro da Malha' ? 'MALHA' : r.tipo === 'Carro Extra' ? 'EXTRA' : 'FORA'}</span></td>
-      <td style="font-weight:700">${r.destino}</td>
-      <td>${r.regiao || '—'}</td>
-      <td style="font-size:11px">${r.composicao}</td>
-      <td style="color:#00B200;font-weight:700;font-family:monospace">${r.saida}</td>
-      <td>${r.dia}</td>
-      <td style="font-family:monospace">${r.frota || '—'}</td>
-      <td>
-        <div style="display:flex;align-items:center;gap:6px">
-          <div style="width:60px;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden">
-            <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px"></div>
-          </div>
-          <span style="font-weight:700;color:${barColor};font-family:monospace;font-size:12px">${pct}%</span>
-        </div>
-      </td>
-      <td>${r.prev_fech || '—'}</td>
-      <td style="font-style:italic;color:#6b7280">${r.obs || '—'}</td>
-    </tr>`;
+  var cheios = data.filter(function(r) { return (r.ocup || 0) >= 1; }).length;
+  var total = data.length;
+
+  var rows = data.map(function(r, i) {
+    var pct = Math.round((r.ocup || 0) * 100);
+    var barColor = pct >= 100 ? '#16a34a' : pct >= 71 ? '#65a30d' : pct >= 51 ? '#ca8a04' : pct >= 31 ? '#ea580c' : pct > 0 ? '#dc2626' : '#e5e7eb';
+    var tipoLabel = r.tipo === 'Carro da Malha' ? 'MALHA' : r.tipo === 'Carro Extra' ? 'EXTRA' : 'FORA';
+    var tipoColor = r.tipo === 'Carro da Malha' ? '#15803d' : r.tipo === 'Carro Extra' ? '#ea580c' : '#dc2626';
+    var tipobg = r.tipo === 'Carro da Malha' ? 'rgba(0,178,0,.1)' : r.tipo === 'Carro Extra' ? 'rgba(234,88,12,.1)' : 'rgba(220,38,38,.1)';
+    return '<tr>'
+      + '<td>' + (i+1) + '</td>'
+      + '<td>' + (r.gerado || '-') + '</td>'
+      + '<td><span style="background:' + tipobc + ';color:' + tipoColor + ';padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">' + tipoLabel + '</span></td>'
+      + '<td style="font-weight:700">' + r.destino + '</td>'
+      + '<td>' + (r.regiao || '-') + '</td>'
+      + '<td style="font-size:11px">' + (r.composicao || '-') + '</td>'
+      + '<td style="color:#00B200;font-weight:700;font-family:monospace">' + (r.saida || '-') + '</td>'
+      + '<td>' + (r.dia || '-') + '</td>'
+      + '<td style="font-family:monospace">' + (r.frota || '-') + '</td>'
+      + '<td><div style="display:flex;align-items:center;gap:4px"><div style="width:50px;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + barColor + '"></div></div><span style="font-weight:700;color:' + barColor + ';font-size:11px">' + pct + '%</span></div></td>'
+      + '<td>' + (r.prev_fech || '-') + '</td>'
+      + '<td style="color:#6b7280;font-style:italic">' + (r.obs || '-') + '</td>'
+      + '</tr>';
   }).join('');
 
-  const win = window.open('', '_blank');
-  if (!win) { showToast('Permita popups no navegador', 'error'); return; }
-  var printCss = [
-    "* { box-sizing: border-box; margin: 0; padding: 0; }",
-    "body { font-family: Arial, sans-serif; font-size: 12px; color: #111; background: #fff; padding: 20px; }",
-    ".header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #111; }",
-    ".header-title { font-size: 16px; font-weight: 700; }",
-    ".header-sub { font-size: 10px; color: #6b7280; margin-top: 2px; }",
-    ".stats { display: flex; gap: 16px; margin-bottom: 14px; }",
-    ".stat { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 14px; }",
-    ".stat-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: .06em; }",
-    ".stat-value { font-size: 18px; font-weight: 700; }",
-    "table { width: 100%; border-collapse: collapse; font-size: 11px; }",
-    "thead th { background: #f3f4f6; padding: 7px 8px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; color: #6b7280; border-bottom: 1.5px solid #e5e7eb; white-space: nowrap; }",
-    "tbody tr { border-bottom: 1px solid #f3f4f6; }",
-    "tbody td { padding: 6px 8px; vertical-align: middle; }",
-    ".footer { margin-top: 16px; padding-top: 10px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; font-size: 10px; color: #9ca3af; }",
-    "@media print { body { padding: 10px; } @page { margin: 10mm; size: landscape; } }"
-  ].join(" ");
-
   var printTime = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  var css = [
+    '* { box-sizing: border-box; margin: 0; padding: 0; }',
+    'body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 16px; }',
+    '.header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 2px solid #111; }',
+    '.title { font-size: 15px; font-weight: 700; }',
+    '.sub { font-size: 10px; color: #6b7280; margin-top: 2px; }',
+    '.stats { display: flex; gap: 12px; margin-bottom: 12px; }',
+    '.stat { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px 12px; }',
+    '.stat-l { font-size: 9px; color: #9ca3af; text-transform: uppercase; }',
+    '.stat-v { font-size: 16px; font-weight: 700; }',
+    'table { width: 100%; border-collapse: collapse; font-size: 11px; }',
+    'thead th { background: #f3f4f6; padding: 6px 8px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; color: #6b7280; border-bottom: 1.5px solid #e5e7eb; white-space: nowrap; }',
+    'tbody tr { border-bottom: 1px solid #f3f4f6; }',
+    'tbody td { padding: 5px 8px; vertical-align: middle; }',
+    '.footer { margin-top: 12px; padding-top: 8px; border-top: 1px solid #e5e7eb; display: flex; justify-content: space-between; font-size: 10px; color: #9ca3af; }',
+    '@media print { body { padding: 8px; } @page { margin: 8mm; size: landscape; } }'
+  ].join(' ');
 
-  var printHTML = "<!DOCTYPE html><html lang='pt-BR'><head><meta charset='UTF-8'>" +
-    "<title>Programados GRU - " + dataLabel + "</title>" +
-    "<style>" + printCss + "</style></head><body>" +
-    "<div class='header'><div>" +
-    "<div class='header-title'>Programacao de Veiculos OPL - GRU</div>" +
-    "<div class='header-sub'>TRAGETTA TRANSPORTES - GUARULHOS</div>" +
-    "</div><div style='text-align:right;font-size:12px'>" +
-    "Data: <strong>" + dataLabel + "</strong><br>" +
-    "Emitido em: " + getDataHoje() + " " + printTime + "<br>" +
-    "Por: Patrick Mafud Ramos</div></div>" +
-    "<div class='stats'>" +
-    "<div class='stat'><div class='stat-label'>Total</div><div class='stat-value' style='color:#00B200'>" + total + "</div></div>" +
-    "<div class='stat'><div class='stat-label'>100% Cheios</div><div class='stat-value' style='color:#15803d'>" + cheios + "</div></div>" +
-    "<div class='stat'><div class='stat-label'>Pendentes</div><div class='stat-value' style='color:#ea580c'>" + (total - cheios) + "</div></div>" +
-    "</div>" +
-    "<table><thead><tr>" +
-    "<th>#</th><th>Gerado em</th><th>Tipo</th><th>Destino</th><th>Regiao</th>" +
-    "<th>Composicao</th><th>Saida</th><th>Dia</th><th>Frota</th><th>Ocupacao</th>" +
-    "<th>Prev. Fechamento</th><th>Obs.</th>" +
-    "</tr></thead><tbody>" + rows + "</tbody></table>" +
-    "<div class='footer'>" +
-    "<span>Sistema de Programacao de Veiculos OPL - GRU - Tragetta Transportes</span>" +
-    "<span>Produzido por Patrick Mafud Ramos - (11) 93322-6881</span>" +
-    "</div></body></html>";
+  var win = window.open('', '_blank');
+  if (!win) { showToast('Permita popups no navegador', 'error'); return; }
+
+  var printHTML = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'
+    + '<title>Programados GRU - ' + hoje + '</title>'
+    + '<style>' + css + '</style></head><body>'
+    + '<div class="header"><div>'
+    + '<div class="title">Programacao de Veiculos OPL - GRU</div>'
+    + '<div class="sub">TRAGETTA TRANSPORTES - GUARULHOS</div>'
+    + '</div><div style="text-align:right;font-size:12px">'
+    + 'Data: <strong>' + hoje + ' (' + diaHoje + ')</strong><br>'
+    + 'Emitido: ' + hoje + ' ' + printTime + '<br>'
+    + 'Patrick Mafud Ramos</div></div>'
+    + '<div class="stats">'
+    + '<div class="stat"><div class="stat-l">Total hoje</div><div class="stat-v" style="color:#00B200">' + total + '</div></div>'
+    + '<div class="stat"><div class="stat-l">100% Cheios</div><div class="stat-v" style="color:#15803d">' + cheios + '</div></div>'
+    + '<div class="stat"><div class="stat-l">Pendentes</div><div class="stat-v" style="color:#ea580c">' + (total-cheios) + '</div></div>'
+    + '</div>'
+    + '<table><thead><tr>'
+    + '<th>#</th><th>Gerado em</th><th>Tipo</th><th>Destino</th><th>Regiao</th>'
+    + '<th>Composicao</th><th>Saida</th><th>Dia</th><th>Frota</th><th>Ocupacao</th>'
+    + '<th>Prev. Fech.</th><th>Obs.</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table>'
+    + '<div class="footer">'
+    + '<span>Sistema de Programacao de Veiculos OPL - GRU - Tragetta Transportes</span>'
+    + '<span>Patrick Mafud Ramos - (11) 93322-6881</span>'
+    + '</div></body></html>';
 
   win.document.write(printHTML);
   win.document.close();
 }
+
 
 // ============================================================
 // PWA — SERVICE WORKER + INSTALL PROMPT
