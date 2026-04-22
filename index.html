@@ -2327,7 +2327,7 @@ function useGrade(idx) {
     <div class="form-info-item"><span class="k">Dia</span><span class="v">${r.dia}</span></div>
   `;
 }
-document.addEventListener('click', e => {
+document.addEventListener('click', function(e) {
   if (!e.target.closest('.autocomplete-wrap')) {
     document.getElementById('dest-suggestions').style.display = 'none';
   }
@@ -2553,12 +2553,14 @@ function clearFilters() {
 // ===== EXPORT CSV =====
 function exportCSV(type) {
   const headers = ['GERADO EM','ORIGEM','DESTINO','REGIÃO','COMPOSIÇÃO','SAÍDA','DIA DA SEMANA','TIPO','FROTA','OCUPAÇÃO','PREV. FECHAMENTO','OBSERVAÇÃO','PRIORIDADE','DATA CRÍTICA'];
-  const toRow = r => [r.gerado,r.origem,r.destino,r.regiao,r.composicao,r.saida,r.dia,r.tipo,r.frota,Math.round(r.ocup*100)+'%',r.prev_fech,r.obs,r.tipo_prior,r.data_crit].map(v => '"'+(v||'')+'"').join(';');
+  var toRow = function(r) { 
+    return [r.gerado,r.origem,r.destino,r.regiao,r.composicao,r.saida,r.dia,r.tipo,r.frota,Math.round(r.ocup*100)+'%',r.prev_fech,r.obs,r.tipo_prior,r.data_crit].map(function(v) { return '"'+(v||'')+'"'; }).join(';');
+  };
   let rows, name;
   if (type === 'prog') { rows = progData; name = 'programacao'; }
   else if (type === 'hist' || type === 'programados') { rows = progData.filter(r => r.frota || r.ocup); name = 'programados'; }
   else { rows = [...progData, ...histData]; name = 'completo'; }
-  const csv = [headers.join(';'), ...rows.map(toRow)].join('\n');
+  const csv = [headers.join(';'), ...rows.map(function(r) { return toRow(r); })].join('\n');
   const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -3114,7 +3116,7 @@ function limparAlertas() {
 }
 
 // Close panel clicking outside
-document.addEventListener('click', e => {
+document.addEventListener('click', function(e) {
   const panel = document.getElementById('notif-panel');
   const bell = document.getElementById('notif-bell');
   if (panel && bell && !panel.contains(e.target) && !bell.contains(e.target)) {
@@ -3454,8 +3456,6 @@ function showPlatAlert(msg, ts) {
   if (typeof isMobile === 'function' && isMobile()) {
     _showPlatAlertPanel(msg, ts);
   }
-};
-  _showPlatAlertPanel(msg, ts);
 
   // Add dot to plataforma tab nav button
   var navBtn = document.getElementById('tab-plataforma');
@@ -3867,7 +3867,7 @@ function enviarAlertaPlataforma() {
   fecharAlertPanel();
   showToast('✅ Alerta enviado para a Plataforma!', 'success');
 }
-document.addEventListener('click', e => {
+document.addEventListener('click', function(e) {
   const p = document.getElementById('plan-alert-panel');
   if (p && p.style.transform === 'translateY(0px)' && !p.contains(e.target) && !e.target.closest('[onclick*="abrirAlertPanel"]')) fecharAlertPanel();
 });
