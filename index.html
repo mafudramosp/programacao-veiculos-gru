@@ -1730,6 +1730,10 @@ async function deleteFromSheets(id) {
 }
 
 function loadData() {
+  // Reset de segurança para mensagens da plataforma no PC
+  // Força o sistema a buscar mensagens da última hora ignorando o histórico do localStorage
+  localStorage.removeItem('pvg_last_plan_seen');
+  
   // Always show local cache immediately (fast startup)
   loadLocal();
   renderProg();
@@ -2523,12 +2527,44 @@ function closeEditModal(e) {
 
 // ===== CLEAR FILTERS =====
 function clearFilters() {
+  // 1. Limpa os filtros do topo
   var ids = ['search-prog', 'filter-tipo', 'filter-regiao', 'filter-dia'];
   ids.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
+
+  // 2. Limpa todos os campos de input dentro da tabela de programação
+  // Busca todos os inputs e selects que começam com os prefixos das linhas
+  const table = document.getElementById('tbody-prog');
+  if (table) {
+    const inputs = table.querySelectorAll('input, select');
+    inputs.forEach(el => {
+      if (el.tagName === 'SELECT') {
+        // Reseta selects para o primeiro valor (geralmente Malha ou vazio)
+        if (el.id.startsWith('tipo_')) el.value = 'Carro da Malha';
+        else el.selectedIndex = 0;
+      } else {
+        // Limpa inputs de texto, número e data
+        el.value = '';
+        // Se for input de ocupação, reseta a barra visual também
+        if (el.id.startsWith('ocup_')) {
+          const rowId = el.id.replace('ocup_', '');
+          const bar = document.getElementById('bar_' + rowId);
+          if (bar) {
+            bar.style.width = '0%';
+            bar.style.background = '#9ca3af';
+          }
+          el.style.color = '#9ca3af';
+          el.style.borderColor = 'var(--border)';
+        }
+      }
+    });
+  }
+
+  // 3. Re-renderiza para aplicar os filtros limpos
   renderProg();
+  showToast('Campos e filtros limpos!', 'info');
 }
 
 // ===== EXPORT CSV =====
@@ -3537,7 +3573,9 @@ function addMsgPlataforma(msg, ts) {
   if (!panel || !list) return;
 
   panel.style.display = 'block';
-  panel.style.setProperty('display', 'block', 'important'); // Força exibição
+  panel.style.setProperty('display', 'block', 'important');
+  panel.style.opacity = '1';
+  panel.style.visibility = 'visible';
   count.textContent = platMsgsList.length;
 
   list.innerHTML = platMsgsList.map(m =>
