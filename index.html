@@ -3537,6 +3537,7 @@ function addMsgPlataforma(msg, ts) {
   if (!panel || !list) return;
 
   panel.style.display = 'block';
+  panel.style.setProperty('display', 'block', 'important'); // Força exibição
   count.textContent = platMsgsList.length;
 
   list.innerHTML = platMsgsList.map(m =>
@@ -3588,12 +3589,27 @@ function verificarMsgsPlataforma(alertas) {
   var lastSeen = getLastSeen('pvg_last_plan_seen');
   var maxId = lastSeen;
 
-  // First-time baseline: don't show old messages
+  // Se for o primeiro acesso (lastSeen === 0), vamos pegar mensagens da última 1 hora
+  // para o usuário não ver uma tela vazia se alguém acabou de mandar mensagem.
   if (lastSeen === 0) {
-    platMsgs.forEach(function(m) {
-      var mid = getAlertId(m);
-      if (mid > maxId) maxId = mid;
+    var umaHoraAtras = Date.now() - (60 * 60 * 1000);
+    var iniciais = platMsgs
+      .map(function(m) { return { msg: m, id: getAlertId(m) }; })
+      .filter(function(x) { return x.id > umaHoraAtras; })
+      .sort(function(a, b) { return a.id - b.id; });
+
+    iniciais.forEach(function(x) {
+      addMsgPlataforma(x.msg.msg, x.msg.ts);
+      if (x.id > maxId) maxId = x.id;
     });
+    
+    // Se não tinha nada na última hora, apenas marca o ID da última mensagem existente
+    if (maxId === 0) {
+      platMsgs.forEach(function(m) {
+        var mid = getAlertId(m);
+        if (mid > maxId) maxId = mid;
+      });
+    }
     setLastSeen('pvg_last_plan_seen', maxId);
     return;
   }
