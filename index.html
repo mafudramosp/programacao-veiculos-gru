@@ -1586,9 +1586,32 @@ function saveLocal() {
 }
 function loadLocal() {
   const stored = localStorage.getItem('prog_veiculo_v4');
-  if (stored) { progData = JSON.parse(stored); }
-  else { progData = []; }
+  if (stored) {
+    var all = JSON.parse(stored);
+    // Filter out entries older than 24 hours
+    var cutoff = new Date();
+    cutoff.setHours(cutoff.getHours() - 24);
+    progData = all.filter(function(r) {
+      if (!r.gerado) return false;
+      var d = parseDateTimeBR(r.gerado);
+      return d && d > cutoff;
+    });
+    // If filtered some out, save back
+    if (progData.length !== all.length) {
+      localStorage.setItem('prog_veiculo_v4', JSON.stringify(progData));
+    }
+  } else {
+    progData = [];
+  }
   nextId = parseInt(localStorage.getItem('prog_nextid_v4') || '4000');
+}
+
+function parseDateTimeBR(s) {
+  if (!s) return null;
+  // Format: "dd/MM/yyyy HH:mm:ss"
+  var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/);
+  if (m) return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5]);
+  return null;
 }
 
 // ===== GOOGLE SHEETS API =====
@@ -3318,29 +3341,32 @@ function sheetsGetAlertas(callback) {
 var _shownPlatIds = new Set(JSON.parse(localStorage.getItem('pvg_shown_plat') || '[]'));
 var _shownPlanIds = new Set(JSON.parse(localStorage.getItem('pvg_shown_plan') || '[]'));
 
+// Also track by numeric ID for float/int mismatch resilience
+function normId(id) {
+  return String(id).split('.')[0].trim();
+}
+
+function hasShownPlat(id) { return _shownPlatIds.has(normId(id)); }
+function hasShownPlan(id) { return _shownPlanIds.has(normId(id)); }
+function addShownPlat(id) { _shownPlatIds.add(normId(id)); }
+function addShownPlan(id) { _shownPlanIds.add(normId(id)); }
+
 function saveShownIds() {
-  // Keep only last 50 IDs to avoid localStorage bloat
-  var platArr = Array.from(_shownPlatIds).slice(-50);
-  var planArr = Array.from(_shownPlanIds).slice(-50);
+  var platArr = Array.from(_shownPlatIds).slice(-100);
+  var planArr = Array.from(_shownPlanIds).slice(-100);
   localStorage.setItem('pvg_shown_plat', JSON.stringify(platArr));
   localStorage.setItem('pvg_shown_plan', JSON.stringify(planArr));
 }
 
 function verificarAlertasPlanejamento(alertas) {
   var novos = alertas.filter(function(a) {
-    return a.de === 'planejamento' && !_shownPlatIds.has(String(a.id));
+    return a.de === 'planejamento' && !hasShownPlat(a.id);
   });
   novos.forEach(function(a) {
-    _shownPlatIds.add(String(a.id));
+    addShownPlat(a.id);
     showPlatAlert(a.msg, a.ts);
   });
   if (novos.length > 0) saveShownIds();
-  // Also mark ALL current alerts as seen (even ones we don't show)
-  // so they never appear on next load
-  alertas.forEach(function(a) {
-    if (a.de === 'planejamento') _shownPlatIds.add(String(a.id));
-  });
-  saveShownIds();
 }
 
 function platPollAlertas() {
@@ -3491,14 +3517,12 @@ function planPollAlertas() {
     var newPlanMsgs = false;
     platMsgs.forEach(function(m) {
       var mid = String(m.id);
-      if (!_shownPlanIds.has(mid)) {
-        _shownPlanIds.add(mid);
+      if (!hasShownPlan(m.id)) {
+        addShownPlan(m.id);
         addMsgPlataforma(m.msg, m.ts);
         newPlanMsgs = true;
       }
     });
-    // Mark ALL as seen
-    platMsgs.forEach(function(m) { _shownPlanIds.add(String(m.id)); });
     if (newPlanMsgs) saveShownIds();
     // Alerts FROM planejamento → show on Plataforma
     verificarAlertasPlanejamento(alertas);
@@ -3769,10 +3793,10 @@ document.addEventListener('click', e => {
 
 // Poll alerts every 30s if Sheets configured
 if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
-  setInterval(platPollAlertas, 10000);
-  setInterval(planPollAlertas, 10000);
-  setTimeout(platPollAlertas, 2000);
-  setTimeout(planPollAlertas, 2000);
+  setInterval(platPollAlertas, 7000);
+  setInterval(planPollAlertas, 7000);
+  setTimeout(platPollAlertas, 1500);
+  setTimeout(planPollAlertas, 1500);
   // Trim localStorage IDs every 2h to prevent bloat
   setInterval(saveShownIds, 7200000);
 }
