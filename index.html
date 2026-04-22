@@ -824,6 +824,22 @@
   #alert-debug .dbg-err { color: #f66; }
   #alert-debug .dbg-info { color: #fc0; }
 
+
+/* Alert debug panel - only shows when debug mode on */
+  #alert-debug {
+    position: fixed; bottom: 10px; left: 10px; z-index: 99999;
+    background: rgba(0,0,0,.9); color: #0f0;
+    font-family: monospace; font-size: 10px;
+    padding: 10px; border-radius: 6px;
+    max-width: 320px; max-height: 200px; overflow-y: auto;
+    border: 1px solid #0f0; line-height: 1.4;
+    display: none;
+  }
+  #alert-debug.on { display: block; }
+  #alert-debug .dbg-line { margin-bottom: 2px; }
+  #alert-debug .dbg-ok { color: #0f0; }
+  #alert-debug .dbg-err { color: #f66; }
+  #alert-debug .dbg-info { color: #fc0; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
@@ -980,6 +996,9 @@
   </button>
   <button class="nav-btn" onclick="showTab('historico')" id="tab-historico">
     Programados <span class="nav-badge" id="badge-hist">0</span>
+  </button>
+  <button class="nav-btn" onclick="showTab('chat')" id="tab-chat" style="position:relative">
+    💬 Chat <span class="nav-badge" id="badge-chat" style="display:none;background:#ef4444;color:#fff">0</span>
   </button>
   <button class="nav-btn" onclick="showTab('plataforma')" id="tab-plataforma"
     style="border-left:2px solid var(--border);margin-left:8px;color:#00B200;font-weight:600">
@@ -1935,6 +1954,12 @@ function showTab(tab) {
     if (dot) dot.remove();
   }
   if (tab === 'grade') renderGrade();
+  if (tab === 'chat') {
+    initChat();
+    var badge = document.getElementById('badge-chat');
+    if (badge) { badge.style.display = 'none'; badge.textContent = '0'; }
+    if (_chatUser) pollChat();
+  }
   document.getElementById('plat-fixed-bar').style.display = (tab === 'plataforma') ? 'block' : 'none';
   if (tab === 'plataforma') { const si = document.getElementById('plat-search'); if(si) si.value=''; const nb=document.getElementById('plat-no-result'); if(nb) nb.style.display='none';
     renderPlataforma();
@@ -4196,24 +4221,7 @@ function imprimirProgramados() {
 
   var printHTML = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'
     + '<title>Programados GRU - ' + hoje + '</title>'
-    + '<style>' + css + '
-  /* Alert debug panel - only shows when debug mode on */
-  #alert-debug {
-    position: fixed; bottom: 10px; left: 10px; z-index: 99999;
-    background: rgba(0,0,0,.9); color: #0f0;
-    font-family: monospace; font-size: 10px;
-    padding: 10px; border-radius: 6px;
-    max-width: 320px; max-height: 200px; overflow-y: auto;
-    border: 1px solid #0f0; line-height: 1.4;
-    display: none;
-  }
-  #alert-debug.on { display: block; }
-  #alert-debug .dbg-line { margin-bottom: 2px; }
-  #alert-debug .dbg-ok { color: #0f0; }
-  #alert-debug .dbg-err { color: #f66; }
-  #alert-debug .dbg-info { color: #fc0; }
-
-</style></head><body>'
+    + '<style>' + css + '</style></head><body>'
     + '<div class="header"><div>'
     + '<div class="title">Programacao de Veiculos OPL - GRU</div>'
     + '<div class="sub">TRAGETTA TRANSPORTES - GUARULHOS</div>'
