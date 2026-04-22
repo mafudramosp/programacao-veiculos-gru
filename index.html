@@ -808,7 +808,81 @@
   }
 
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
+// --- SISTEMA DE COMUNICAÇÃO INSTANTÂNEA ---
+function getAlertId(a) {
+  if (a.id && !isNaN(Number(a.id))) return Number(a.id);
+  if (a.ts) {
+    var m = String(a.ts).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (m) {
+      var d = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], m[6] ? +m[6] : 0);
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+    var d2 = new Date(a.ts);
+    if (!isNaN(d2.getTime())) return d2.getTime();
+  }
+  var s = (a.de || '') + (a.msg || '') + (a.ts || '');
+  var h = 0;
+  for (var i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
+  return Math.abs(h);
+}
+function getLastSeen(k) { return parseInt(localStorage.getItem(k) || '0'); }
+function setLastSeen(k, v) { localStorage.setItem(k, String(v)); }
+
+// Lógica de Sincronização Forçada (PC e Celular)
+var _mensagensExibidas = [];
+
+function processarMensagensInstantaneas(alertas) {
+  if (!alertas || !alertas.length) return;
+  
+  var listaPC = document.getElementById('plat-msgs-list');
+  var textoNaTelaPC = listaPC ? listaPC.innerText : "";
+
+  alertas.forEach(function(m) {
+    var chave = m.de + "|" + m.msg + "|" + m.ts;
+    
+    // Se a mensagem ainda não foi processada nesta sessão
+    if (_mensagensExibidas.indexOf(chave) === -1) {
+      
+      // 1. Se for mensagem da PLATAFORMA (Celular -> PC)
+      if (m.de === 'plataforma') {
+        // Se não estiver na lista do PC, adiciona
+        if (textoNaTelaPC.indexOf(m.msg) === -1) {
+          addMsgPlataforma(m.msg, m.ts);
+        }
+      }
+      
+      // 2. Se for mensagem do PLANEJAMENTO (PC -> Celular)
+      if (m.de === 'planejamento') {
+        // Mostra o alerta flutuante (apenas no celular via isMobile)
+        if (typeof isMobile === 'function' && isMobile()) {
+          showPlatAlert(m.msg, m.ts);
+        }
+      }
+      
+      _mensagensExibidas.push(chave);
+    }
+  });
+}
+
+// Sobrescrever as funções de polling originais para usar a nova lógica unificada
+platPollAlertas = function() {
+  sheetsGetAlertas(function(alertas) {
+    processarMensagensInstantaneas(alertas);
+    var el = document.getElementById('plat-last-check');
+    if (el) {
+      var n = new Date();
+      var t = String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0') + ':' + String(n.getSeconds()).padStart(2,'0');
+      el.textContent = 'Sincronizado: ' + t;
+    }
+  });
+};
+
+planPollAlertas = platPollAlertas; // Ambos usam a mesma lógica de sincronização
+
+// ------------------------------------------
+
+</script>
 </head>
 <body>
 
@@ -1510,7 +1584,81 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js" defer></script><script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js" defer>
+// --- SISTEMA DE COMUNICAÇÃO INSTANTÂNEA ---
+function getAlertId(a) {
+  if (a.id && !isNaN(Number(a.id))) return Number(a.id);
+  if (a.ts) {
+    var m = String(a.ts).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (m) {
+      var d = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], m[6] ? +m[6] : 0);
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+    var d2 = new Date(a.ts);
+    if (!isNaN(d2.getTime())) return d2.getTime();
+  }
+  var s = (a.de || '') + (a.msg || '') + (a.ts || '');
+  var h = 0;
+  for (var i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
+  return Math.abs(h);
+}
+function getLastSeen(k) { return parseInt(localStorage.getItem(k) || '0'); }
+function setLastSeen(k, v) { localStorage.setItem(k, String(v)); }
+
+// Lógica de Sincronização Forçada (PC e Celular)
+var _mensagensExibidas = [];
+
+function processarMensagensInstantaneas(alertas) {
+  if (!alertas || !alertas.length) return;
+  
+  var listaPC = document.getElementById('plat-msgs-list');
+  var textoNaTelaPC = listaPC ? listaPC.innerText : "";
+
+  alertas.forEach(function(m) {
+    var chave = m.de + "|" + m.msg + "|" + m.ts;
+    
+    // Se a mensagem ainda não foi processada nesta sessão
+    if (_mensagensExibidas.indexOf(chave) === -1) {
+      
+      // 1. Se for mensagem da PLATAFORMA (Celular -> PC)
+      if (m.de === 'plataforma') {
+        // Se não estiver na lista do PC, adiciona
+        if (textoNaTelaPC.indexOf(m.msg) === -1) {
+          addMsgPlataforma(m.msg, m.ts);
+        }
+      }
+      
+      // 2. Se for mensagem do PLANEJAMENTO (PC -> Celular)
+      if (m.de === 'planejamento') {
+        // Mostra o alerta flutuante (apenas no celular via isMobile)
+        if (typeof isMobile === 'function' && isMobile()) {
+          showPlatAlert(m.msg, m.ts);
+        }
+      }
+      
+      _mensagensExibidas.push(chave);
+    }
+  });
+}
+
+// Sobrescrever as funções de polling originais para usar a nova lógica unificada
+platPollAlertas = function() {
+  sheetsGetAlertas(function(alertas) {
+    processarMensagensInstantaneas(alertas);
+    var el = document.getElementById('plat-last-check');
+    if (el) {
+      var n = new Date();
+      var t = String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0') + ':' + String(n.getSeconds()).padStart(2,'0');
+      el.textContent = 'Sincronizado: ' + t;
+    }
+  });
+};
+
+planPollAlertas = platPollAlertas; // Ambos usam a mesma lógica de sincronização
+
+// ------------------------------------------
+
+</script><script>
 // ============================================================
 // CONFIGURAÇÃO DO GOOGLE SHEETS (preencha após implantar o Apps Script)
 // ============================================================
@@ -2327,7 +2475,7 @@ function useGrade(idx) {
     <div class="form-info-item"><span class="k">Dia</span><span class="v">${r.dia}</span></div>
   `;
 }
-document.addEventListener('click', function(e) {
+document.addEventListener('click', e => {
   if (!e.target.closest('.autocomplete-wrap')) {
     document.getElementById('dest-suggestions').style.display = 'none';
   }
@@ -2524,43 +2672,22 @@ function closeEditModal(e) {
 // ===== CLEAR FILTERS =====
 function clearFilters() {
   var ids = ['search-prog', 'filter-tipo', 'filter-regiao', 'filter-dia'];
-  for (var i = 0; i < ids.length; i++) {
-    var el = document.getElementById(ids[i]);
+  ids.forEach(function(id) {
+    var el = document.getElementById(id);
     if (el) el.value = '';
-  }
-  var table = document.getElementById('tbody-prog');
-  if (table) {
-    var inputs = table.querySelectorAll('input, select');
-    for (var j = 0; j < inputs.length; j++) {
-      var item = inputs[j];
-      if (item.tagName === 'SELECT') {
-        if (item.id.indexOf('tipo_') === 0) item.value = 'Carro da Malha';
-        else item.selectedIndex = 0;
-      } else {
-        item.value = '';
-        if (item.id.indexOf('ocup_') === 0) {
-          var rowId = item.id.replace('ocup_', '');
-          var bar = document.getElementById('bar_' + rowId);
-          if (bar) { bar.style.width = '0%'; bar.style.background = '#9ca3af'; }
-          item.style.color = '#9ca3af'; item.style.borderColor = 'var(--border)';
-        }
-      }
-    }
-  }
+  });
   renderProg();
 }
 
 // ===== EXPORT CSV =====
 function exportCSV(type) {
   const headers = ['GERADO EM','ORIGEM','DESTINO','REGIÃO','COMPOSIÇÃO','SAÍDA','DIA DA SEMANA','TIPO','FROTA','OCUPAÇÃO','PREV. FECHAMENTO','OBSERVAÇÃO','PRIORIDADE','DATA CRÍTICA'];
-  var toRow = function(r) { 
-    return [r.gerado,r.origem,r.destino,r.regiao,r.composicao,r.saida,r.dia,r.tipo,r.frota,Math.round(r.ocup*100)+'%',r.prev_fech,r.obs,r.tipo_prior,r.data_crit].map(function(v) { return '"'+(v||'')+'"'; }).join(';');
-  };
+  const toRow = r => [r.gerado,r.origem,r.destino,r.regiao,r.composicao,r.saida,r.dia,r.tipo,r.frota,Math.round(r.ocup*100)+'%',r.prev_fech,r.obs,r.tipo_prior,r.data_crit].map(v => '"'+(v||'')+'"').join(';');
   let rows, name;
   if (type === 'prog') { rows = progData; name = 'programacao'; }
   else if (type === 'hist' || type === 'programados') { rows = progData.filter(r => r.frota || r.ocup); name = 'programados'; }
   else { rows = [...progData, ...histData]; name = 'completo'; }
-  const csv = [headers.join(';'), ...rows.map(function(r) { return toRow(r); })].join('\n');
+  const csv = [headers.join(';'), ...rows.map(toRow)].join('\n');
   const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8;'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -3116,7 +3243,7 @@ function limparAlertas() {
 }
 
 // Close panel clicking outside
-document.addEventListener('click', function(e) {
+document.addEventListener('click', e => {
   const panel = document.getElementById('notif-panel');
   const bell = document.getElementById('notif-bell');
   if (panel && bell && !panel.contains(e.target) && !bell.contains(e.target)) {
@@ -3339,26 +3466,6 @@ function salvarPlatCard(rowId, destino, saida, dia) {
 }
 
 // ===== ALERTAS BIDIRECIONAIS =====
-
-function getAlertId(a) {
-  if (a.id && !isNaN(Number(a.id))) return Number(a.id);
-  if (a.ts) {
-    var m = String(a.ts).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
-    if (m) {
-      var d = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], m[6] ? +m[6] : 0);
-      if (!isNaN(d.getTime())) return d.getTime();
-    }
-    var d2 = new Date(a.ts);
-    if (!isNaN(d2.getTime())) return d2.getTime();
-  }
-  var s = (a.de || '') + (a.msg || '') + (a.ts || '');
-  var h = 0;
-  for (var i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
-  return Math.abs(h);
-}
-function getLastSeen(k) { return parseInt(localStorage.getItem(k) || '0'); }
-function setLastSeen(k, v) { localStorage.setItem(k, String(v)); }
-
 function sheetsGetAlertas(callback) {
   if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
   var cbName = 'alertasCb_' + Date.now();
@@ -3427,7 +3534,7 @@ function platPollAlertas() {
       el.textContent = 'Verificado: ' + t + ' (' + alertas.length + ' alertas)';
     }
     verificarAlertasPlanejamento(alertas);
-    // verificarMsgsPlataforma(alertas);
+    verificarMsgsPlataforma(alertas);
   });
 }
 
@@ -3452,10 +3559,10 @@ function platPollManual() {
 var _pendingPlatAlert = null;
 
 function showPlatAlert(msg, ts) {
+  // Always show the panel regardless of which tab is active
+  // Store as pending too, in case user switches tabs later
   _pendingPlatAlert = { msg: msg, ts: ts };
-  if (typeof isMobile === 'function' && isMobile()) {
-    _showPlatAlertPanel(msg, ts);
-  }
+  _showPlatAlertPanel(msg, ts);
 
   // Add dot to plataforma tab nav button
   var navBtn = document.getElementById('tab-plataforma');
@@ -3574,7 +3681,7 @@ function escapeHtml(s) {
 function planPollAlertas() {
   sheetsGetAlertas(function(alertas) {
     if (!alertas) return;
-    // verificarMsgsPlataforma(alertas);
+    verificarMsgsPlataforma(alertas);
     verificarAlertasPlanejamento(alertas);
   });
 }
@@ -3867,15 +3974,15 @@ function enviarAlertaPlataforma() {
   fecharAlertPanel();
   showToast('✅ Alerta enviado para a Plataforma!', 'success');
 }
-document.addEventListener('click', function(e) {
+document.addEventListener('click', e => {
   const p = document.getElementById('plan-alert-panel');
   if (p && p.style.transform === 'translateY(0px)' && !p.contains(e.target) && !e.target.closest('[onclick*="abrirAlertPanel"]')) fecharAlertPanel();
 });
 
 // Poll alerts every 30s if Sheets configured
 if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
-  setInterval(platPollAlertas, 5000);
-  setInterval(planPollAlertas, 5000);
+  setInterval(platPollAlertas, 4000);
+  setInterval(planPollAlertas, 4000);
   setTimeout(platPollAlertas, 1500);
   setTimeout(planPollAlertas, 1500);
   // Trim localStorage IDs every 2h to prevent bloat
@@ -4191,6 +4298,80 @@ window.addEventListener('appinstalled', function() {
   showToast('✅ App instalado com sucesso!', 'success');
 });
 
+
+
+// --- SISTEMA DE COMUNICAÇÃO INSTANTÂNEA ---
+function getAlertId(a) {
+  if (a.id && !isNaN(Number(a.id))) return Number(a.id);
+  if (a.ts) {
+    var m = String(a.ts).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (m) {
+      var d = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], m[6] ? +m[6] : 0);
+      if (!isNaN(d.getTime())) return d.getTime();
+    }
+    var d2 = new Date(a.ts);
+    if (!isNaN(d2.getTime())) return d2.getTime();
+  }
+  var s = (a.de || '') + (a.msg || '') + (a.ts || '');
+  var h = 0;
+  for (var i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
+  return Math.abs(h);
+}
+function getLastSeen(k) { return parseInt(localStorage.getItem(k) || '0'); }
+function setLastSeen(k, v) { localStorage.setItem(k, String(v)); }
+
+// Lógica de Sincronização Forçada (PC e Celular)
+var _mensagensExibidas = [];
+
+function processarMensagensInstantaneas(alertas) {
+  if (!alertas || !alertas.length) return;
+  
+  var listaPC = document.getElementById('plat-msgs-list');
+  var textoNaTelaPC = listaPC ? listaPC.innerText : "";
+
+  alertas.forEach(function(m) {
+    var chave = m.de + "|" + m.msg + "|" + m.ts;
+    
+    // Se a mensagem ainda não foi processada nesta sessão
+    if (_mensagensExibidas.indexOf(chave) === -1) {
+      
+      // 1. Se for mensagem da PLATAFORMA (Celular -> PC)
+      if (m.de === 'plataforma') {
+        // Se não estiver na lista do PC, adiciona
+        if (textoNaTelaPC.indexOf(m.msg) === -1) {
+          addMsgPlataforma(m.msg, m.ts);
+        }
+      }
+      
+      // 2. Se for mensagem do PLANEJAMENTO (PC -> Celular)
+      if (m.de === 'planejamento') {
+        // Mostra o alerta flutuante (apenas no celular via isMobile)
+        if (typeof isMobile === 'function' && isMobile()) {
+          showPlatAlert(m.msg, m.ts);
+        }
+      }
+      
+      _mensagensExibidas.push(chave);
+    }
+  });
+}
+
+// Sobrescrever as funções de polling originais para usar a nova lógica unificada
+platPollAlertas = function() {
+  sheetsGetAlertas(function(alertas) {
+    processarMensagensInstantaneas(alertas);
+    var el = document.getElementById('plat-last-check');
+    if (el) {
+      var n = new Date();
+      var t = String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0') + ':' + String(n.getSeconds()).padStart(2,'0');
+      el.textContent = 'Sincronizado: ' + t;
+    }
+  });
+};
+
+planPollAlertas = platPollAlertas; // Ambos usam a mesma lógica de sincronização
+
+// ------------------------------------------
 
 </script>
 </body>
