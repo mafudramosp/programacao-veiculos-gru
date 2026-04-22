@@ -3318,6 +3318,45 @@ function salvarPlatCard(rowId, destino, saida, dia) {
 }
 
 // ===== ALERTAS BIDIRECIONAIS =====
+
+// ============================================================
+// FUNÇÕES AUXILIARES DE CONTROLE DE MENSAGENS
+// Estas funções estavam sendo chamadas mas nunca foram definidas,
+// causando erro "getLastSeen is not defined" e quebrando o polling.
+// ============================================================
+function getAlertId(alerta) {
+  // Gera um ID numérico único a partir do campo 'id' ou do timestamp
+  if (alerta.id && !isNaN(Number(alerta.id))) return Number(alerta.id);
+  if (alerta.ts) {
+    // Tenta formato BR: dd/mm/yyyy hh:mm:ss
+    var m = String(alerta.ts).match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (m) {
+      var dt = new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5], m[6] ? +m[6] : 0);
+      if (!isNaN(dt.getTime())) return dt.getTime();
+    }
+    // Tenta ISO
+    var d = new Date(alerta.ts);
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  // Fallback: hash da string da mensagem
+  var str = (alerta.de || '') + '|' + (alerta.msg || '') + '|' + (alerta.ts || '');
+  var hash = 0;
+  for (var i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function getLastSeen(key) {
+  return parseInt(localStorage.getItem(key) || '0');
+}
+
+function setLastSeen(key, val) {
+  localStorage.setItem(key, String(val));
+}
+// ============================================================
+
 function sheetsGetAlertas(callback) {
   if (!USAR_SHEETS || !APPS_SCRIPT_URL) return;
   var cbName = 'alertasCb_' + Date.now();
@@ -3385,8 +3424,12 @@ function platPollAlertas() {
       var t = String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0') + ':' + String(n.getSeconds()).padStart(2,'0');
       el.textContent = 'Verificado: ' + t + ' (' + alertas.length + ' alertas)';
     }
+    // platPollAlertas roda na aba Plataforma (celular):
+    // verifica APENAS alertas vindos do Planejamento (de === 'planejamento')
     verificarAlertasPlanejamento(alertas);
-    verificarMsgsPlataforma(alertas);
+    // IMPORTANTE: NÃO chama verificarMsgsPlataforma aqui.
+    // verificarMsgsPlataforma é chamada SOMENTE por planPollAlertas (PC/Programação).
+    // Misturar as duas causava falha no controle de mensagens já vistas.
   });
 }
 
@@ -3831,14 +3874,37 @@ document.addEventListener('click', e => {
   if (p && p.style.transform === 'translateY(0px)' && !p.contains(e.target) && !e.target.closest('[onclick*="abrirAlertPanel"]')) fecharAlertPanel();
 });
 
-// Poll alerts every 30s if Sheets configured
+// ============================================================
+// POLLING DE MENSAGENS — COMUNICAÇÃO ENTRE DISPOSITIVOS
+// Intervalo de 5s para melhor responsividade entre celular e PC.
+// Ambas as funções rodam em TODOS os dispositivos:
+//   - platPollAlertas: busca alertas Planejamento → Plataforma
+//   - planPollAlertas: busca mensagens Plataforma → Programação
+// ============================================================
 if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS && typeof APPS_SCRIPT_URL !== 'undefined' && APPS_SCRIPT_URL) {
-  setInterval(platPollAlertas, 7000);
-  setInterval(planPollAlertas, 7000);
-  setTimeout(platPollAlertas, 1500);
-  setTimeout(planPollAlertas, 1500);
+  // Polling a cada 5 segundos para ambas as direções
+  setInterval(platPollAlertas, 5000);
+  setInterval(planPollAlertas, 5000);
+
+  // Primeira verificação escalonada logo após o carregamento
+  setTimeout(function() { platPollAlertas(); }, 1500);
+  setTimeout(function() { planPollAlertas(); }, 2500);
+
   // Trim localStorage IDs every 2h to prevent bloat
   setInterval(saveShownIds, 7200000);
+
+  // RECONEXÃO AUTOMÁTICA: quando o usuário volta ao app/aba após
+  // ter ficado em segundo plano, dispara verificação imediata.
+  // Isso garante que mensagens enviadas enquanto a tela estava
+  // inativa apareçam assim que o usuário voltar.
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+      setTimeout(function() {
+        platPollAlertas();
+        planPollAlertas();
+      }, 300);
+    }
+  });
 }
 
 // ============================================================
