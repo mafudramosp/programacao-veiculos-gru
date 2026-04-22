@@ -1,4 +1,4 @@
-const CACHE = 'pvg-v6';
+const CACHE = 'pvg-v7';
 const STATIC = ['./manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
