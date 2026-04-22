@@ -807,6 +807,23 @@
     .mobile-mode #plat-fixed-bar { bottom: 64px; }
   }
 
+
+  /* Alert debug panel - only shows when debug mode on */
+  #alert-debug {
+    position: fixed; bottom: 10px; left: 10px; z-index: 99999;
+    background: rgba(0,0,0,.9); color: #0f0;
+    font-family: monospace; font-size: 10px;
+    padding: 10px; border-radius: 6px;
+    max-width: 320px; max-height: 200px; overflow-y: auto;
+    border: 1px solid #0f0; line-height: 1.4;
+    display: none;
+  }
+  #alert-debug.on { display: block; }
+  #alert-debug .dbg-line { margin-bottom: 2px; }
+  #alert-debug .dbg-ok { color: #0f0; }
+  #alert-debug .dbg-err { color: #f66; }
+  #alert-debug .dbg-info { color: #fc0; }
+
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
@@ -1462,6 +1479,13 @@
       ">Cancelar</button>
     </div>
   </div>
+</div>
+
+
+<!-- ALERT DEBUG PANEL (click 5 times on the clock to open) -->
+<div id="alert-debug">
+  <div style="font-weight:bold;color:#fff;margin-bottom:4px">🔍 Alert Debug (toque 5x no relógio para fechar)</div>
+  <div id="dbg-log"></div>
 </div>
 
 <!-- PLAT LATERAL ALERT (fixed, body level) -->
@@ -3376,8 +3400,10 @@ function verificarAlertasPlanejamento(alertas) {
 }
 
 function platPollAlertas() {
+  dbgLog('Poll iniciado...', 'info');
   sheetsGetAlertas(function(alertas) {
-    if (!alertas) return;
+    if (!alertas) { dbgLog('⚠️ Nenhuma resposta do Sheets', 'err'); return; }
+    dbgLog('📥 Recebidos: ' + alertas.length + ' alertas', 'ok');
     // Update "last checked" indicator
     var el = document.getElementById('plat-last-check');
     if (el) {
@@ -3529,6 +3555,42 @@ function limparMsgsPlatforma() {
 function escapeHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+
+// ============================================================
+// DEBUG SYSTEM - Toque 5x no relógio para abrir/fechar
+// ============================================================
+var _dbgClicks = 0;
+var _dbgLog = [];
+
+function dbgLog(msg, type) {
+  type = type || 'info';
+  var time = new Date().toLocaleTimeString('pt-BR');
+  _dbgLog.unshift({t: time, m: msg, type: type});
+  if (_dbgLog.length > 30) _dbgLog.pop();
+  var el = document.getElementById('dbg-log');
+  if (el) {
+    el.innerHTML = _dbgLog.map(function(e) {
+      return '<div class="dbg-line dbg-' + e.type + '">[' + e.t + '] ' + e.m + '</div>';
+    }).join('');
+  }
+  console.log('[ALERT]', time, msg);
+}
+
+function toggleDebug() {
+  _dbgClicks++;
+  setTimeout(function() { _dbgClicks = Math.max(0, _dbgClicks - 1); }, 3000);
+  if (_dbgClicks >= 5) {
+    _dbgClicks = 0;
+    document.getElementById('alert-debug').classList.toggle('on');
+  }
+}
+
+// Attach click handler to clock on load
+setTimeout(function() {
+  var clock = document.getElementById('clock');
+  if (clock) clock.addEventListener('click', toggleDebug);
+}, 1000);
 
 function planPollAlertas() {
   sheetsGetAlertas(function(alertas) {
@@ -4091,7 +4153,24 @@ function imprimirProgramados() {
 
   var printHTML = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">'
     + '<title>Programados GRU - ' + hoje + '</title>'
-    + '<style>' + css + '</style></head><body>'
+    + '<style>' + css + '
+  /* Alert debug panel - only shows when debug mode on */
+  #alert-debug {
+    position: fixed; bottom: 10px; left: 10px; z-index: 99999;
+    background: rgba(0,0,0,.9); color: #0f0;
+    font-family: monospace; font-size: 10px;
+    padding: 10px; border-radius: 6px;
+    max-width: 320px; max-height: 200px; overflow-y: auto;
+    border: 1px solid #0f0; line-height: 1.4;
+    display: none;
+  }
+  #alert-debug.on { display: block; }
+  #alert-debug .dbg-line { margin-bottom: 2px; }
+  #alert-debug .dbg-ok { color: #0f0; }
+  #alert-debug .dbg-err { color: #f66; }
+  #alert-debug .dbg-info { color: #fc0; }
+
+</style></head><body>'
     + '<div class="header"><div>'
     + '<div class="title">Programacao de Veiculos OPL - GRU</div>'
     + '<div class="sub">TRAGETTA TRANSPORTES - GUARULHOS</div>'
