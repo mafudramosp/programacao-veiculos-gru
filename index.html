@@ -1732,7 +1732,7 @@ async function deleteFromSheets(id) {
 function loadData() {
   // Reset de segurança para mensagens da plataforma no PC
   // Força o sistema a buscar mensagens da última hora ignorando o histórico do localStorage
-  localStorage.removeItem('pvg_last_plan_seen');
+  // Reset de mensagens removido para modo instantâneo
   
   // Always show local cache immediately (fast startup)
   loadLocal();
@@ -3440,9 +3440,34 @@ function saveShownIds() {
 }
 
 function verificarAlertasPlanejamento(alertas) {
-  var novos = alertas.filter(function(a) {
-    return a.de === 'planejamento' && !hasShownPlat(a.id);
+  var planMsgs = alertas.filter(function(a) { return a.de === 'planejamento'; });
+  if (!planMsgs.length) return;
+
+  var lastSeen = getLastSeen('pvg_last_plat_seen');
+  var maxId = lastSeen;
+
+  // Se for a primeira vez que abre, apenas marca o ID da última mensagem
+  // para não disparar alertas de mensagens antigas ao carregar a página.
+  if (lastSeen === 0) {
+    planMsgs.forEach(function(m) {
+      var mid = getAlertId(m);
+      if (mid > maxId) maxId = mid;
+    });
+    setLastSeen('pvg_last_plat_seen', maxId);
+    return;
+  }
+
+  planMsgs.forEach(function(m) {
+    var mid = getAlertId(m);
+    // Se o ID é maior que o último visto, é uma mensagem nova "instantânea"
+    if (mid > lastSeen) {
+      showPlatAlert(m.msg, m.ts);
+      if (mid > maxId) maxId = mid;
+    }
   });
+
+  if (maxId > lastSeen) setLastSeen('pvg_last_plat_seen', maxId);
+});
   novos.forEach(function(a) {
     addShownPlat(a.id);
     showPlatAlert(a.msg, a.ts);
@@ -3472,7 +3497,7 @@ function platPollAlertas() {
 function resetarAlertas() {
   if (!confirm('Limpar histórico de alertas vistos? Alertas antigos podem reaparecer na próxima verificação.')) return;
   localStorage.removeItem('pvg_last_plat_seen');
-  localStorage.removeItem('pvg_last_plan_seen');
+  // Reset de mensagens removido para modo instantâneo
   // Legacy keys too
   localStorage.removeItem('pvg_shown_plat');
   localStorage.removeItem('pvg_shown_plan');
@@ -3627,45 +3652,36 @@ function verificarMsgsPlataforma(alertas) {
   var platMsgs = alertas.filter(function(a) { return a.de === 'plataforma'; });
   if (!platMsgs.length) return;
 
-  var lastSeen = getLastSeen('pvg_last_plan_seen');
-  var maxId = lastSeen;
+  // Pega o que já está na tela para não duplicar na mesma sessão
+  var naTela = Array.from(document.querySelectorAll('#plat-msgs-list .msg-item'))
+    .map(el => el.innerText);
 
-  // Se for o primeiro acesso (lastSeen === 0), vamos pegar mensagens da última 1 hora
-  // para o usuário não ver uma tela vazia se alguém acabou de mandar mensagem.
-  if (lastSeen === 0) {
-    var umaHoraAtras = Date.now() - (60 * 60 * 1000);
-    var iniciais = platMsgs
-      .map(function(m) { return { msg: m, id: getAlertId(m) }; })
-      .filter(function(x) { return x.id > umaHoraAtras; })
-      .sort(function(a, b) { return a.id - b.id; });
-
-    iniciais.forEach(function(x) {
-      addMsgPlataforma(x.msg.msg, x.msg.ts);
-      if (x.id > maxId) maxId = x.id;
-    });
-    
-    // Se não tinha nada na última hora, apenas marca o ID da última mensagem existente
-    if (maxId === 0) {
-      platMsgs.forEach(function(m) {
-        var mid = getAlertId(m);
-        if (mid > maxId) maxId = mid;
-      });
+  platMsgs.forEach(function(m) {
+    // Se a mensagem não está na tela, adiciona (Instantâneo)
+    var jaEstaNaTela = naTela.some(txt => txt.includes(m.msg));
+    if (!jaEstaNaTela) {
+      addMsgPlataforma(m.msg, m.ts);
     }
-    setLastSeen('pvg_last_plan_seen', maxId);
-    return;
-  }
-
-  var novos = platMsgs
-    .map(function(m) { return { msg: m, id: getAlertId(m) }; })
-    .filter(function(x) { return x.id > lastSeen; })
-    .sort(function(a, b) { return a.id - b.id; });
-
-  novos.forEach(function(x) {
-    addMsgPlataforma(x.msg.msg, x.msg.ts);
-    if (x.id > maxId) maxId = x.id;
   });
+});
+  if (!platMsgs.length) return;
 
-  if (maxId > lastSeen) setLastSeen('pvg_last_plan_seen', maxId);
+  // No PC, vamos sempre mostrar as mensagens da última hora, 
+  // independentemente do que está no localStorage, para garantir sincronia.
+  var umaHoraAtras = Date.now() - (60 * 60 * 1000);
+  
+  // Pegamos o que já está na tela para não duplicar
+  var naTela = Array.from(document.querySelectorAll('#plat-msgs-list .msg-item'))
+    .map(el => el.innerText);
+
+  platMsgs.forEach(function(m) {
+    var mid = getAlertId(m);
+    // Se a mensagem é recente (1h) e não está na tela, adiciona
+    var jaEstaNaTela = naTela.some(txt => txt.includes(m.msg));
+    if (mid > umaHoraAtras && !jaEstaNaTela) {
+      addMsgPlataforma(m.msg, m.ts);
+    }
+  });
 }
 
 
