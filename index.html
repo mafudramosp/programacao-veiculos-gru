@@ -930,6 +930,11 @@
       <span class="mobile-nav-icon">📱</span>
       <span class="mobile-nav-label">Plataforma</span>
     </button>
+    <button class="mobile-nav-item" id="mnav-chat" onclick="mobileGoTo('chat')" style="position:relative">
+      <span class="mobile-nav-icon">💬</span>
+      <span class="mobile-nav-label">Chat</span>
+      <span id="mnav-chat-badge" style="display:none;position:absolute;top:2px;right:8px;background:#ef4444;color:#fff;border-radius:50%;width:16px;height:16px;font-size:10px;font-weight:700;align-items:center;justify-content:center">0</span>
+    </button>
     <button class="mobile-nav-item" id="mnav-trocar" onclick="trocarPapel()">
       <span class="mobile-nav-icon">⇄</span>
       <span class="mobile-nav-label">Trocar</span>
@@ -4088,14 +4093,16 @@ function selecionarPapel(papel, silent) {
 
   if (papel === 'plataforma') {
     showTab('plataforma');
-    // On mobile: show bottom nav with only Plataforma + Trocar
     if (isMobile()) {
       document.getElementById('mobile-bottom-nav').classList.add('visible');
       document.body.classList.add('mobile-mode');
       ['mnav-programacao','mnav-grade','mnav-historico'].forEach(function(id){
         var el=document.getElementById(id); if(el) el.style.display='none';
       });
-      document.getElementById('mnav-plataforma').style.display = 'flex';
+      var platBtn = document.getElementById('mnav-plataforma');
+      if (platBtn) platBtn.style.display = 'flex';
+      var chatBtn = document.getElementById('mnav-chat');
+      if (chatBtn) chatBtn.style.display = 'flex';
       updateMobileNav('plataforma');
     }
   } else {
@@ -4106,7 +4113,10 @@ function selecionarPapel(papel, silent) {
       ['mnav-programacao','mnav-grade','mnav-historico'].forEach(function(id){
         var el=document.getElementById(id); if(el) el.style.display='flex';
       });
-      document.getElementById('mnav-plataforma').style.display = 'none';
+      var platBtn = document.getElementById('mnav-plataforma');
+      if (platBtn) platBtn.style.display = 'none';
+      var chatBtn = document.getElementById('mnav-chat');
+      if (chatBtn) chatBtn.style.display = 'flex';
       updateMobileNav('programacao');
     }
   }
