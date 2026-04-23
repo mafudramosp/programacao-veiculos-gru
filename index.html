@@ -2553,33 +2553,20 @@ function clearFilters() {
 }
 
 function limparDadosDia() {
-  if (!confirm('Limpar TODOS os dados preenchidos hoje?\n\nIsso irá apagar frota, ocupação e observações de todas as rotas do dia atual.')) return;
+  if (!confirm('Limpar TODOS os dados preenchidos na Programação?\n\nIsso irá apagar frota, ocupação e observações de todas as rotas.')) return;
 
-  var diaHoje = getDiaHoje();
-  var hoje = getDataHoje();
-
-  // Remove records from progData that match today's grade routes
-  var antes = progData.length;
-  progData = progData.filter(function(r) {
-    // Keep records NOT from today
-    if (r.gerado) {
-      var geradoDate = r.gerado.substring(0, 10);
-      if (geradoDate === hoje) return false;
-    }
-    return true;
-  });
-
-  var removidos = antes - progData.length;
+  var total = progData.length;
+  progData = [];
   saveLocal();
 
-  // Also clear from Sheets
+  // Clear all from Sheets
   if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS && APPS_SCRIPT_URL) {
-    sheetsPost('clearDay', { dia: hoje });
+    sheetsPost('clearAll', {});
   }
 
   renderProg();
   renderHist();
-  showToast('✅ ' + removidos + ' registros do dia foram limpos!', 'success');
+  showToast('✅ ' + total + ' registros limpos com sucesso!', 'success');
 }
 
 // ===== EXPORT CSV =====
