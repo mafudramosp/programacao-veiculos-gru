@@ -936,7 +936,7 @@
     onmouseout="this.style.background='none'">
     ⟳ Sheets
   </button>
-  <div class="header-divider"></div>
+  <div style="margin-left:auto"></div>
   <button id="notif-bell" onclick="toggleNotifPanel()" title="Alertas de horário" style="
     background:none;border:none;cursor:pointer;position:relative;
     padding:6px 8px;border-radius:8px;transition:background 0.15s;
@@ -952,7 +952,6 @@
       font-family:'Poppins',sans-serif;line-height:1;
     ">0</span>
   </button>
-  <div class="header-divider"></div>
   <div class="header-credit" style="text-align:right;line-height:1.5">
     <div style="font-size:11px;font-weight:600;color:#d1d5db">Produzido por: <span style="color:#00CC00">Patrick Mafud Ramos</span></div>
     <div style="font-size:10px;color:var(--text3)">(11) 93322-6881 · <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d6a6b7a2a4bfb5bdf8a4b7bbb9a596b9a3a2bab9b9bdf8b5b9bbf8b4a4">[email&#160;protected]</a></div>
@@ -1059,12 +1058,12 @@
         </div>
         <div class="form-group autocomplete-wrap">
           <label class="form-label">Destino <span>*</span></label>
-          <input type="text" id="f-destino" placeholder="Ex: REC (livre)" autocomplete="off" style="text-transform:uppercase">
+          <input type="text" id="f-destino" placeholder="Ex: REC (livre)" autocomplete="off" style="text-transform:uppercase" oninput="lookupRegiao()">
 
         </div>
         <div class="form-group">
           <label class="form-label">Região</label>
-          <input type="text" id="f-regiao" placeholder="Auto" readonly>
+          <input type="text" id="f-regiao" placeholder="Região" readonly>
         </div>
         <div class="form-group">
           <label class="form-label">Composição <span>*</span></label>
@@ -2330,6 +2329,56 @@ function populateFilters() {
 }
 
 // ===== GRADE AUTOCOMPLETE =====
+
+function lookupRegiao() {
+  var dest = (document.getElementById('f-destino')?.value || '').toUpperCase().trim();
+  var regEl = document.getElementById('f-regiao');
+  if (!regEl) return;
+
+  if (!dest) { regEl.value = ''; return; }
+
+  // Manual region corrections / overrides
+  var regiaoOverrides = {
+    'PMW': 'NORTE CO',
+    'JPR': 'NORTE CO',
+    'BSB': 'NORTE CO'
+  };
+  if (regiaoOverrides[dest]) {
+    regEl.value = regiaoOverrides[dest];
+    return;
+  }
+
+  // Exact match in grade
+  var exact = gradeData.find(function(r) {
+    return r.destino.toUpperCase() === dest;
+  });
+  if (exact && exact.regiao) {
+    regEl.value = exact.regiao;
+    return;
+  }
+
+  // Partial match - starts with
+  var partial = gradeData.find(function(r) {
+    return r.destino.toUpperCase().startsWith(dest) && r.regiao;
+  });
+  if (partial) {
+    regEl.value = partial.regiao;
+    return;
+  }
+
+  // Check if dest appears in composicao of any route
+  var compMatch = gradeData.find(function(r) {
+    return r.composicao && r.composicao.toUpperCase().split(/[,\s]+/).indexOf(dest) >= 0 && r.regiao;
+  });
+  if (compMatch) {
+    regEl.value = compMatch.regiao;
+    return;
+  }
+
+  // Not found
+  regEl.value = '';
+}
+
 function onDestInput() {
   const val = document.getElementById('f-destino').value.toUpperCase();
   const container = document.getElementById('dest-suggestions');
