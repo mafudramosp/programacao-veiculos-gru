@@ -923,7 +923,7 @@
     </div>
   </div>
   <div class="header-divider"></div>
-  <div class="header-clock" id="clock">--:--:--</div>
+
   <button id="install-btn" onclick="instalarApp()" style="display:flex;align-items:center;gap:6px;background:rgba(0,178,0,.15);color:#4ade80;border:1px solid rgba(0,178,0,.3);border-radius:20px;padding:5px 13px;font-size:11px;font-weight:700;font-family:'Poppins',sans-serif;cursor:pointer;white-space:nowrap">&#8615; Instalar App</button>
   <button onclick="trocarPapel()" id="trocar-btn" title="Trocar perfil" style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:11px;font-family:'Poppins',sans-serif;padding:4px 8px;border-radius:6px;transition:all .15s;white-space:nowrap;display:none" onmouseover="this.style.color='#9ca3af'" onmouseout="this.style.color='#6b7280'">
     ⇄ Trocar perfil
@@ -1059,8 +1059,8 @@
         </div>
         <div class="form-group autocomplete-wrap">
           <label class="form-label">Destino <span>*</span></label>
-          <input type="text" id="f-destino" placeholder="Ex: REC" oninput="onDestInput()" autocomplete="off">
-          <div class="grade-suggestion" id="dest-suggestions" style="display:none"></div>
+          <input type="text" id="f-destino" placeholder="Ex: REC (livre)" autocomplete="off" style="text-transform:uppercase">
+
         </div>
         <div class="form-group">
           <label class="form-label">Região</label>
@@ -1125,7 +1125,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Previsão de Fechamento</label>
-          <input type="date" id="f-prev_fech">
+          <input type="datetime-local" id="f-prev_fech">
         </div>
       </div>
     </div>
@@ -1235,20 +1235,20 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr>
+          <tr id="hist-thead-row">
             <th>#</th>
-            <th>Gerado em</th>
+            <th onclick="sortHist('gerado')" style="cursor:pointer" title="Ordenar">Gerado em <span id="sh-gerado">↕</span></th>
             <th>Tipo</th>
-            <th>Destino</th>
+            <th onclick="sortHist('destino')" style="cursor:pointer" title="Ordenar">Destino <span id="sh-destino">↕</span></th>
             <th>Região</th>
             <th>Composição</th>
-            <th>Saída</th>
+            <th onclick="sortHist('saida')" style="cursor:pointer" title="Ordenar">Saída <span id="sh-saida">↕</span></th>
             <th>Dia</th>
-            <th>Frota</th>
-            <th>Ocupação</th>
-            <th>Prev. Fechamento</th>
+            <th onclick="sortHist('frota')" style="cursor:pointer" title="Ordenar">Frota <span id="sh-frota">↕</span></th>
+            <th onclick="sortHist('ocup')" style="cursor:pointer" title="Ordenar">Ocupação <span id="sh-ocup">↕</span></th>
+            <th onclick="sortHist('prev_fech')" style="cursor:pointer;color:#00B200" title="Ordenar — itens com data aparecem primeiro">Prev. Fechamento <span id="sh-prev_fech">↑</span></th>
             <th>Obs.</th>
-          <th>Data Crítica</th>
+          <th onclick="sortHist('data_crit')" style="cursor:pointer" title="Ordenar">Data Crítica <span id="sh-data_crit">↕</span></th>
           <th>Prioridade</th>
           <th style="width:90px">Ações</th>
           </tr>
@@ -2074,7 +2074,7 @@ function renderProg() {
       <td class="mono" style="color:#00B200;font-weight:600">${r.saida}</td>
       <td style="font-size:11px;color:var(--text2)">${r.dia}</td>
       <td><input type="text" id="frota_${r._rowId}" value="${r.frota}" placeholder="Nº ou placa" style="width:140px;font-size:12px;font-family:monospace"></td>
-      <td><input type="date" id="prev_${r._rowId}" value="${toDateOnly(r.prev_fech)}" style="width:145px;font-size:12px"></td>
+      <td><input type="datetime-local" id="prev_${r._rowId}" value="${toDatetimeLocal(r.prev_fech)}" style="width:180px;font-size:11px"></td>
       <td><input type="text" id="obs_${r._rowId}" value="${r.obs}" placeholder="Observação..." style="width:148px;font-size:12px"></td>
       <td>
         <select id="prior_${r._rowId}" style="font-size:11px;padding:3px 6px;width:100px">
@@ -2123,8 +2123,7 @@ function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
   const ocupPct = parseInt(document.getElementById('ocup_' + rowId)?.value) || 0;
   const tipo = document.getElementById('tipo_' + rowId)?.value || 'Carro da Malha';
   const frota = document.getElementById('frota_' + rowId)?.value || '';
-  const prev_fech = fromDateOnly(document.getElementById('prev_' + rowId)?.value || '');
-  const obs = document.getElementById('obs_' + rowId)?.value || '';
+  const prev_fech = fromDatetimeLocal(document.getElementById('prev_' + rowId)?.value || '');document.getElementById('obs_' + rowId)?.value || '';
   const tipo_prior = document.getElementById('prior_' + rowId)?.value || '';
   const data_crit = fromDateOnly(document.getElementById('crit_' + rowId)?.value || '');
 
@@ -2221,6 +2220,25 @@ function renderGrade() {
 }
 
 // ===== RENDER HISTÓRICO =====
+
+// ---- Programados column sorter ----
+var _histSortCol = 'prev_fech';
+var _histSortDir = 1; // 1=asc, -1=desc
+
+function sortHist(col) {
+  if (_histSortCol === col) {
+    _histSortDir *= -1;
+  } else {
+    _histSortCol = col;
+    _histSortDir = 1;
+  }
+  // Update header indicators
+  document.querySelectorAll('[id^="sh-"]').forEach(function(el) { el.textContent = '↕'; });
+  var el = document.getElementById('sh-' + col);
+  if (el) el.textContent = _histSortDir === 1 ? '↑' : '↓';
+  renderHist();
+}
+
 function renderHist() {
   const search = (document.getElementById('search-hist')?.value || '').toLowerCase();
   const tipo = document.getElementById('filter-hist-tipo')?.value || '';
@@ -2247,7 +2265,27 @@ function renderHist() {
     return true;
   });
   // Sort by saida ascending
-  data.sort((a, b) => (a.saida || '').localeCompare(b.saida || ''));
+  data.sort(function(a, b) {
+    var col = _histSortCol;
+    var dir = _histSortDir;
+
+    // Always put prev_fech records first when sorting by prev_fech
+    if (col === 'prev_fech' || col === 'data_crit') {
+      var pa = a[col] || '';
+      var pb = b[col] || '';
+      if (pa && !pb) return -1 * dir;
+      if (!pa && pb) return 1 * dir;
+      if (pa && pb) {
+        var da = parseDateBR(pa), db = parseDateBR(pb);
+        if (da && db) return (da - db) * dir;
+      }
+      return 0;
+    }
+    if (col === 'ocup') return ((a.ocup || 0) - (b.ocup || 0)) * dir;
+    var va = String(a[col] || '').toLowerCase();
+    var vb = String(b[col] || '').toLowerCase();
+    return va.localeCompare(vb) * dir;
+  });
   document.getElementById('badge-hist').textContent = data.length;
   const tbody = document.getElementById('tbody-hist');
   if (!data.length) {
@@ -3195,7 +3233,27 @@ function renderPlataforma() {
 
   const hoje = gradeData
     .filter(r => r.dia === dia)
-    .sort((a, b) => (a.saida || '').localeCompare(b.saida || ''));
+    .sort(function(a, b) {
+    var col = _histSortCol;
+    var dir = _histSortDir;
+
+    // Always put prev_fech records first when sorting by prev_fech
+    if (col === 'prev_fech' || col === 'data_crit') {
+      var pa = a[col] || '';
+      var pb = b[col] || '';
+      if (pa && !pb) return -1 * dir;
+      if (!pa && pb) return 1 * dir;
+      if (pa && pb) {
+        var da = parseDateBR(pa), db = parseDateBR(pb);
+        if (da && db) return (da - db) * dir;
+      }
+      return 0;
+    }
+    if (col === 'ocup') return ((a.ocup || 0) - (b.ocup || 0)) * dir;
+    var va = String(a[col] || '').toLowerCase();
+    var vb = String(b[col] || '').toLowerCase();
+    return va.localeCompare(vb) * dir;
+  });
 
   const container = document.getElementById('plat-cards');
   if (!container) return;
@@ -4137,7 +4195,7 @@ function imprimirProgramados() {
     var barColor = pct >= 100 ? '#16a34a' : pct >= 71 ? '#65a30d' : pct >= 51 ? '#ca8a04' : pct >= 31 ? '#ea580c' : pct > 0 ? '#dc2626' : '#e5e7eb';
     var tipoLabel = r.tipo === 'Carro da Malha' ? 'MALHA' : r.tipo === 'Carro Extra' ? 'EXTRA' : 'FORA';
     var tipoColor = r.tipo === 'Carro da Malha' ? '#15803d' : r.tipo === 'Carro Extra' ? '#ea580c' : '#dc2626';
-    var tipobg = r.tipo === 'Carro da Malha' ? 'rgba(0,178,0,.1)' : r.tipo === 'Carro Extra' ? 'rgba(234,88,12,.1)' : 'rgba(220,38,38,.1)';
+    var tipoBg = r.tipo === 'Carro da Malha' ? 'rgba(0,178,0,.1)' : r.tipo === 'Carro Extra' ? 'rgba(234,88,12,.1)' : 'rgba(220,38,38,.1)';
     return '<tr>'
       + '<td>' + (i+1) + '</td>'
       + '<td>' + (r.gerado || '-') + '</td>'
