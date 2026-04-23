@@ -998,7 +998,8 @@
     <select id="filter-regiao" onchange="renderProg()">
       <option value="">Todas as regiões</option>
     </select>
-    <button class="btn btn-ghost btn-sm" onclick="clearFilters()">Limpar</button>
+    <button class="btn btn-ghost btn-sm" onclick="clearFilters()" title="Limpar filtros">Limpar filtros</button>
+    <button class="btn btn-danger btn-sm" onclick="limparDadosDia()" title="Limpar todos os dados preenchidos hoje">🗑 Limpar dados do dia</button>
     <div style="margin-left:auto;display:flex;gap:8px">
       <button class="btn btn-success btn-sm" onclick="salvarTodos()">Salvar Todos</button>
       <button class="btn btn-ghost btn-sm" onclick="exportCSV('prog')">Exportar CSV</button>
@@ -2542,12 +2543,43 @@ function closeEditModal(e) {
 
 // ===== CLEAR FILTERS =====
 function clearFilters() {
+  // Clear only the search/filter fields
   var ids = ['search-prog', 'filter-tipo', 'filter-regiao', 'filter-dia'];
   ids.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
   renderProg();
+}
+
+function limparDadosDia() {
+  if (!confirm('Limpar TODOS os dados preenchidos hoje?\n\nIsso irá apagar frota, ocupação e observações de todas as rotas do dia atual.')) return;
+
+  var diaHoje = getDiaHoje();
+  var hoje = getDataHoje();
+
+  // Remove records from progData that match today's grade routes
+  var antes = progData.length;
+  progData = progData.filter(function(r) {
+    // Keep records NOT from today
+    if (r.gerado) {
+      var geradoDate = r.gerado.substring(0, 10);
+      if (geradoDate === hoje) return false;
+    }
+    return true;
+  });
+
+  var removidos = antes - progData.length;
+  saveLocal();
+
+  // Also clear from Sheets
+  if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS && APPS_SCRIPT_URL) {
+    sheetsPost('clearDay', { dia: hoje });
+  }
+
+  renderProg();
+  renderHist();
+  showToast('✅ ' + removidos + ' registros do dia foram limpos!', 'success');
 }
 
 // ===== EXPORT CSV =====
