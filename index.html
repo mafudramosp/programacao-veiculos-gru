@@ -1962,15 +1962,21 @@ function fromDateOnly(isoStr) {
 // Build today's prog rows from grade + any saved edits
 function buildProgRows() {
   const diaHoje = getDiaHoje();
+  const hoje = getDataHoje(); // "dd/MM/yyyy"
   // Get grade routes for today
   const gradeHoje = gradeData.filter(r => r.dia === diaHoje);
   
-  // Merge with saved progData (match by destino+saida+dia)
-  // Sort by departure time ascending
+  // Merge with saved progData - match by destino+saida+dia AND gerado date = today
+  // This prevents old weeks' data from bleeding into current day
   gradeHoje.sort((a, b) => a.saida.localeCompare(b.saida));
   return gradeHoje.map((g, i) => {
     const key = g.destino + '|' + g.saida + '|' + g.dia;
-    const saved = progData.find(p => p.destino === g.destino && p.saida === g.saida && p.dia === g.dia);
+    const saved = progData.find(p =>
+      p.destino === g.destino &&
+      p.saida === g.saida &&
+      p.dia === g.dia &&
+      p.gerado && p.gerado.substring(0, 10) === hoje  // must be from today
+    );
     return {
       _rowId: 'row_' + i + '_' + g.destino + '_' + g.saida.replace(':',''),
       origem: g.origem,
