@@ -1528,6 +1528,7 @@
 
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
+<div id="sync-status" style="display:none;position:fixed;bottom:70px;right:24px;z-index:9000;background:#1a1a2e;color:#94a3b8;font-size:12px;font-family:Poppins,sans-serif;padding:8px 14px;border-radius:8px;border:1px solid #2d2d4e"></div>
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js" defer></script><script>
 // ============================================================
@@ -2385,6 +2386,7 @@ function lookupRegiao() {
 function onDestInput() {
   const val = document.getElementById('f-destino').value.toUpperCase();
   const container = document.getElementById('dest-suggestions');
+  if (!container) return; // element removed - skip
   if (!val || val.length < 1) { container.style.display = 'none'; return; }
   
   const matches = gradeData.filter(r => r.destino.toUpperCase().startsWith(val) || r.composicao.toUpperCase().includes(val));
@@ -3530,10 +3532,8 @@ function verificarAlertasPlanejamento(alertas) {
 }
 
 function platPollAlertas() {
-  dbgLog('Poll iniciado...', 'info');
   sheetsGetAlertas(function(alertas) {
-    if (!alertas) { dbgLog('⚠️ Nenhuma resposta do Sheets', 'err'); return; }
-    dbgLog('📥 Recebidos: ' + alertas.length + ' alertas', 'ok');
+    if (!alertas) return;
     // Update "last checked" indicator
     var el = document.getElementById('plat-last-check');
     if (el) {
@@ -3977,7 +3977,8 @@ function salvarAddPlat() {
 }
 
 function platEnviarMsg() {
-  const msg = document.getElementById('plat-msg-input')?.value?.trim();
+  var _platInput = document.getElementById('plat-msg-input');
+  const msg = _platInput ? _platInput.value.trim() : '';
   if (!msg) return;
   enviarAlertaViaGet('plataforma', msg);
   document.getElementById('plat-msg-input').value = '';
@@ -4504,7 +4505,7 @@ if (APPS_SCRIPT_URL) {
       if (tab === 'chat') {
         initChat();
         var badge = document.getElementById('badge-chat');
-        if (badge) { badge.style.display = 'none'; badge.textContent = '0'; }
+        if (badge) { badge.style.display = 'none'; if (badge) badge.textContent = '0'; }
         if (_chatUser) pollChat();
       }
     };
