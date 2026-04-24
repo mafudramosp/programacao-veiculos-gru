@@ -1868,9 +1868,12 @@ function now() {
 
 // ===== CLOCK =====
 function updateClock() {
-  const d = new Date();
-  const pad = n => String(n).padStart(2,'0');
-  document.getElementById('clock').textContent = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()}  ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  var el = document.getElementById('clock');
+  if (!el) return; // clock element was removed - skip silently
+  var d = new Date();
+  var pad = function(n) { return String(n).padStart(2,'0'); };
+  el.textContent = pad(d.getDate()) + '/' + pad(d.getMonth()+1) + '/' + d.getFullYear()
+    + '  ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
 }
 
 // ===== TAB NAVIGATION =====
