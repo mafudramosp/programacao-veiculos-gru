@@ -840,6 +840,7 @@
   #alert-debug .dbg-info { color: #fc0; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -996,7 +997,7 @@
     <button class="btn btn-danger btn-sm" onclick="limparDadosDia()" title="Limpar todos os dados preenchidos hoje">🗑 Limpar dados do dia</button>
     <div style="margin-left:auto;display:flex;gap:8px">
       <button class="btn btn-success btn-sm" onclick="salvarTodos()">Salvar Todos</button>
-      <button class="btn btn-ghost btn-sm" onclick="exportCSV('prog')">Exportar CSV</button>
+      <button class="btn btn-ghost btn-sm" onclick="exportCSV('prog')">📊 Exportar Excel</button>
 
     </div>
   </div>
@@ -1216,7 +1217,7 @@
     <input type="date" id="filter-hist-data" onchange="renderHist()"
       style="width:145px;font-size:12px;font-weight:500">
     <button class="btn btn-ghost btn-sm" onclick="limparFiltroData()" title="Ver todos" style="color:var(--text3);font-size:11px">✕</button>
-    <button class="btn btn-ghost btn-sm" onclick="exportCSV('programados')">Exportar CSV</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportCSV('programados')">📊 Exportar Excel</button>
       <button class="btn btn-ghost btn-sm" onclick="imprimirProgramados()">🖨️ Imprimir</button>
     <div style="margin-left:auto">
       <button class="btn btn-success btn-sm" id="btn-email" onclick="enviarEmail()" style="display:flex;align-items:center;gap:7px;font-weight:600;padding:6px 16px">
@@ -2121,13 +2122,31 @@ function debounceSave(rowId, destino, saida, dia, existingId, delay) {
 }
 
 function autoSalvarLinha(rowId, destino, saida, dia, existingId) {
-  var frota = document.getElementById('frota_' + rowId)?.value || '';
+  var frota = (document.getElementById('frota_' + rowId)?.value || '').trim();
   var ocupPct = parseInt(document.getElementById('ocup_' + rowId)?.value) || 0;
-  var obs = document.getElementById('obs_' + rowId)?.value || '';
-  var tipo = document.getElementById('tipo_' + rowId)?.value || '';
-  // Only save if at least one meaningful field is filled
-  if (!frota && !ocupPct && !obs) return;
-  salvarLinha(rowId, destino, saida, dia, existingId, true); // silent=true
+  var obs = (document.getElementById('obs_' + rowId)?.value || '').trim();
+
+  // If all main fields are empty AND record exists → delete it
+  if (!frota && !ocupPct && !obs) {
+    if (existingId !== null && existingId !== undefined && existingId !== 'null') {
+      var numId = parseInt(existingId);
+      if (!isNaN(numId)) {
+        progData = progData.filter(function(r) { return r._id !== numId; });
+        saveLocal();
+        if (typeof sheetsPost === 'function' && USAR_SHEETS) {
+          sheetsPost('delete', { id: String(numId) });
+        }
+        renderHist();
+        // Flash row to indicate deletion
+        var row = document.getElementById('tr-' + rowId);
+        if (row) { row.style.opacity = '0.4'; setTimeout(function(){ renderProg(); }, 500); }
+      }
+    }
+    return;
+  }
+
+  // Fields filled → save
+  salvarLinha(rowId, destino, saida, dia, existingId, true);
 }
 
 function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
@@ -2729,20 +2748,26 @@ function limparDadosDia() {
 
 // ===== EXPORT CSV =====
 function exportCSV(type) {
-  const headers = ['GERADO EM','ORIGEM','DESTINO','REGIÃO','COMPOSIÇÃO','SAÍDA','DIA DA SEMANA','TIPO','FROTA','OCUPAÇÃO','PREV. FECHAMENTO','OBSERVAÇÃO','PRIORIDADE','DATA CRÍTICA'];
-  const toRow = r => [r.gerado,r.origem,r.destino,r.regiao,r.composicao,r.saida,r.dia,r.tipo,r.frota,Math.round(r.ocup*100)+'%',r.prev_fech,r.obs,r.tipo_prior,r.data_crit].map(v => '"'+(v||'')+'"').join(';');
-  let rows, name;
-  if (type === 'prog') { rows = progData; name = 'programacao'; }
-  else if (type === 'hist' || type === 'programados') { rows = progData.filter(r => r.frota || r.ocup); name = 'programados'; }
-  else { rows = [...progData, ...histData]; name = 'completo'; }
-  const csv = [headers.join(';'), ...rows.map(toRow)].join('\n');
-  const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8;'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `prog_veiculos_${name}_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  showToast('CSV exportado com sucesso!','success');
+  if (typeof XLSX === 'undefined') {
+    showToast('Aguarde carregamento...', 'info');
+    return;
+  }
+  var data = progData.filter(function(r) { return r.frota || r.ocup; });
+  if (!data.length) { showToast('Nenhum dado para exportar', 'error'); return; }
+
+  var headers = ['Gerado Em','Destino','Regiao','Composicao','Saida','Dia','Tipo','Frota','Ocupacao %','Prev. Fechamento','Observacao','Data Critica','Prioridade'];
+  var rows = data.map(function(r) {
+    return [r.gerado||'',r.destino||'',r.regiao||'',r.composicao||'',r.saida||'',r.dia||'',r.tipo||'',r.frota||'',Math.round((r.ocup||0)*100),r.prev_fech||'',r.obs||'',r.data_crit||'',r.tipo_prior||''];
+  });
+
+  var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
+  ws['!cols'] = [{wch:18},{wch:10},{wch:14},{wch:30},{wch:8},{wch:14},{wch:16},{wch:14},{wch:12},{wch:20},{wch:30},{wch:14},{wch:12}];
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Programacao GRU');
+  XLSX.writeFile(wb, 'Programacao_GRU_' + getDataHoje().replace(/\//g,'-') + '.xlsx');
+  showToast('Excel exportado!', 'success');
 }
+
 
 // ===== INIT =====
 loadData();
