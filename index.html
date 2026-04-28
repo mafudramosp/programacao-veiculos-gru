@@ -1217,6 +1217,7 @@
     <input type="date" id="filter-hist-data" onchange="renderHist()"
       style="width:145px;font-size:12px;font-weight:500">
     <button class="btn btn-ghost btn-sm" onclick="limparFiltroData()" title="Ver todos" style="color:var(--text3);font-size:11px">✕</button>
+    <button id="btn-excluir-sel" class="btn btn-danger btn-sm" onclick="excluirSelecionados()" style="display:inline-flex;align-items:center;gap:5px;opacity:0.4;cursor:not-allowed" disabled>🗑 Excluir selecionados</button>
     <button class="btn btn-ghost btn-sm" onclick="exportCSV('programados')">📊 Exportar Excel</button>
       <button class="btn btn-ghost btn-sm" onclick="imprimirProgramados()">🖨️ Imprimir</button>
     <div style="margin-left:auto">
@@ -2038,7 +2039,7 @@ function renderProg() {
 
   const tbody = document.getElementById('tbody-prog');
   if (!data.length) {
-    tbody.innerHTML = `<tr><td colspan="14"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Nenhuma rota na grade para ${diaHoje}</div></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Nenhuma rota na grade para ${diaHoje}</div></div></td></tr>`;
     return;
   }
 
@@ -2300,8 +2301,18 @@ function onRowCheck(checkbox) {
 
 function atualizarBtnExcluir() {
   var btn = document.getElementById('btn-excluir-sel');
-  if (btn) btn.style.display = _selectedIds.size > 0 ? 'inline-flex' : 'none';
-  if (btn && _selectedIds.size > 0) btn.textContent = '🗑 Excluir (' + _selectedIds.size + ')';
+  if (!btn) return;
+  if (_selectedIds.size > 0) {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+    btn.textContent = '🗑 Excluir (' + _selectedIds.size + ')';
+  } else {
+    btn.disabled = true;
+    btn.style.opacity = '0.4';
+    btn.style.cursor = 'not-allowed';
+    btn.textContent = '🗑 Excluir selecionados';
+  }
 }
 
 function excluirSelecionados() {
@@ -2371,10 +2382,11 @@ function renderHist() {
   document.getElementById('badge-hist').textContent = data.length;
   const tbody = document.getElementById('tbody-hist');
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="14"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma programação salva ainda</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Preencha e salve registros na aba Programação</div></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15"><div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Nenhuma programação salva ainda</div><div style="font-size:12px;color:var(--text3);margin-top:4px">Preencha e salve registros na aba Programação</div></div></td></tr>';
     return;
   }
-  tbody.innerHTML = data.map((r, i) => `<tr id="hist-row-${r._id}">
+  tbody.innerHTML = data.map((r, i) => `<tr id="hist-row-${r._id}" class="hist-row" data-id="${r._id}">
+    <td style="width:36px;text-align:center"><input type="checkbox" class="hist-row-check" data-id="${r._id}" onchange="onRowCheck(this)" ${_selectedIds.has(r._id)?'checked':''} style="cursor:pointer;width:16px;height:16px"></td>
     <td class="row-pos">${i+1}</td>
     <td style="font-size:11px;color:var(--text3)">${r.gerado || '—'}</td>
     <td>${tipoBadge(r.tipo)}</td>
@@ -3214,12 +3226,18 @@ function diffLabel(diff) {
 }
 
 function triggerAlertToast(alerta) {
-  // Ring bell
+  // Sound + vibration
+  if (alerta.level === 'urgent') tocarAlertaUrgente();
+  else tocarMensagem();
+
+  // Ring bell safely
   const bell = document.getElementById('notif-bell');
-  bell.classList.remove('bell-ringing');
-  void bell.offsetWidth; // reflow
-  bell.classList.add('bell-ringing');
-  setTimeout(() => bell.classList.remove('bell-ringing'), 700);
+  if (bell) {
+    bell.classList.remove('bell-ringing');
+    void bell.offsetWidth;
+    bell.classList.add('bell-ringing');
+    setTimeout(() => bell.classList.remove('bell-ringing'), 700);
+  }
 
   // Show floating toast
   let existing = document.getElementById('alert-toast-el');
