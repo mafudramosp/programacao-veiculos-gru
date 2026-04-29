@@ -1815,7 +1815,11 @@ function deduplicar(records) {
   const seen = new Map();
   [...records].reverse().forEach(r => {
     const key = r.destino + '|' + r.saida + '|' + r.dia + '|' + r.frota;
-    if (!seen.has(key)) seen.set(key, r);
+    const existing = seen.get(key);
+    // If we have a duplicate, prioritize the one that has a time in prev_fech (length > 10)
+    if (!existing || (r.prev_fech && String(r.prev_fech).length > String(existing.prev_fech).length)) {
+      seen.set(key, r);
+    }
   });
   return [...seen.values()].reverse();
 }
@@ -2237,7 +2241,7 @@ function salvarTodos() {
     const ocupPct = parseInt(document.getElementById('ocup_' + r._rowId)?.value) || 0;
     const frota = document.getElementById('frota_' + r._rowId)?.value || '';
     const tipo = document.getElementById('tipo_' + r._rowId)?.value || 'Carro da Malha';
-    const prev_fech = fromDateOnly(document.getElementById('prev_' + r._rowId)?.value || '');
+    const prev_fech = fromDatetimeLocal(document.getElementById('prev_' + r._rowId)?.value || '');
     const obs = document.getElementById('obs_' + r._rowId)?.value || '';
     const tipo_prior = document.getElementById('prior_' + r._rowId)?.value || '';
     const data_crit = fromDateOnly(document.getElementById('crit_' + r._rowId)?.value || '');
