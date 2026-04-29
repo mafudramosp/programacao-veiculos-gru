@@ -1937,13 +1937,15 @@ function toDateOnly(brStr) {
   return '';
 }
 function toDatetimeLocal(brStr) {
-  // Convert "dd/mm/yyyy hh:mm" to "yyyy-mm-ddThh:mm" for datetime-local input
   if (!brStr || brStr === '—') return '';
-  // try pattern dd/mm/yyyy hh:mm
-  const m = brStr.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
-  if (m) return `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}`;
-  // already in ISO format?
-  if (brStr.includes('T')) return brStr.slice(0,16);
+  // "dd/MM/yyyy HH:mm" format
+  var m = brStr.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+  if (m) return m[3] + '-' + m[2] + '-' + m[1] + 'T' + m[4] + ':' + m[5];
+  // "dd/MM/yyyy" date only - add 00:00
+  var m2 = brStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (m2) return m2[3] + '-' + m2[2] + '-' + m2[1] + 'T00:00';
+  // already ISO
+  if (brStr.includes('T')) return brStr.slice(0, 16);
   return '';
 }
 function fromDatetimeLocal(isoStr) {
@@ -3065,7 +3067,7 @@ function editProgramado(id) {
       '</div></div>' +
 
       '<div class="form-group"><label class="form-label">Prev. Fechamento</label>' +
-      '<input type="date" id="ep-prev" value="' + toDateOnly(r.prev_fech) + '"></div>' +
+      '<input type="datetime-local" id="ep-prev" style="font-size:13px;width:100%" value="' + toDateOnly(r.prev_fech) + '></div>' +
 
       '<div class="form-group"><label class="form-label">Prioridade</label>' +
       '<select id="ep-prior">' + priorOpts + '</select></div>' +
@@ -3106,7 +3108,7 @@ function saveEditProgramado(id) {
   r.tipo       = document.getElementById('ep-tipo').value;
   r.frota      = document.getElementById('ep-frota').value;
   r.ocup       = (parseInt(document.getElementById('ep-ocup').value)||0) / 100;
-  r.prev_fech  = fromDateOnly(document.getElementById('ep-prev').value);
+  r.prev_fech  = fromDatetimeLocal(document.getElementById('ep-prev').value || '');
   r.tipo_prior = document.getElementById('ep-prior').value;
   r.data_crit  = fromDateOnly(document.getElementById('ep-crit').value);
   r.obs        = document.getElementById('ep-obs').value;
