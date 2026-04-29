@@ -932,14 +932,6 @@
     onmouseout="this.style.background='none'">
     ⟳ Sheets
   </button>
-  <button onclick="abrirConfigUrl()" title="Configurar URL do Apps Script"
-    style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:11px;
-    font-family:Poppins,sans-serif;padding:4px 8px;border-radius:6px;
-    transition:all 0.15s;display:inline-flex;align-items:center;gap:4px"
-    onmouseover="this.style.background='rgba(255,255,255,0.08)'"
-    onmouseout="this.style.background='none'">
-    ⚙️ URL
-  </button>
   <div style="margin-left:auto"></div>
   <button id="notif-bell" onclick="toggleNotifPanel()" title="Alertas de horário" style="
     background:none;border:none;cursor:pointer;position:relative;
@@ -1546,62 +1538,8 @@
 // ============================================================
 // CONFIGURAÇÃO DO GOOGLE SHEETS (preencha após implantar o Apps Script)
 // ============================================================
-// URL saved in localStorage overrides the default
-var _DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbztb45wzjjBY24Ep_GJysK6DyjeEOSf_zMa0xREBJjZomBmYRSL4SlsOTZ9JOOJdY_1Pg/exec';
-var APPS_SCRIPT_URL = localStorage.getItem('pvg_apps_script_url') || _DEFAULT_URL;
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbztb45wzjjBY24Ep_GJysK6DyjeEOSf_zMa0xREBJjZomBmYRSL4SlsOTZ9JOOJdY_1Pg/exec';
 var USAR_SHEETS = true;
-
-function abrirConfigUrl() {
-  var modal = document.getElementById('config-url-modal');
-  if (modal) {
-    document.getElementById('config-url-input').value = APPS_SCRIPT_URL;
-    modal.style.display = 'flex';
-    setTimeout(function(){ document.getElementById('config-url-input').focus(); }, 200);
-  }
-}
-function fecharConfigUrl() {
-  var modal = document.getElementById('config-url-modal');
-  if (modal) modal.style.display = 'none';
-}
-function salvarConfigUrl() {
-  var input = document.getElementById('config-url-input');
-  var url = (input.value || '').trim();
-  if (!url || !url.includes('script.google.com')) {
-    showToast('URL inválida. Deve ser do script.google.com', 'error');
-    return;
-  }
-  APPS_SCRIPT_URL = url;
-  localStorage.setItem('pvg_apps_script_url', url);
-  fecharConfigUrl();
-  showToast('✅ URL salva! Sincronizando...', 'success');
-  setTimeout(syncManual, 800);
-}
-function testarUrl() {
-  var input = document.getElementById('config-url-input');
-  var url = (input.value || '').trim();
-  if (!url) return;
-  showToast('🔍 Testando conexão...', 'info');
-  var cbName = 'testCb_' + Date.now();
-  var tm = setTimeout(function() {
-    delete window[cbName];
-    document.getElementById('config-url-status').innerHTML = '❌ <span style="color:#dc2626">Timeout — URL inválida ou Apps Script não republicado</span>';
-  }, 8000);
-  window[cbName] = function(json) {
-    clearTimeout(tm); delete window[cbName];
-    if (json && json.status === 'ok') {
-      document.getElementById('config-url-status').innerHTML = '✅ <span style="color:#16a34a">Conexão OK! ' + (json.records ? json.records.length : 0) + ' registros encontrados.</span>';
-    } else {
-      document.getElementById('config-url-status').innerHTML = '⚠️ <span style="color:#ca8a04">Resposta com erro: ' + (json && json.message ? json.message : 'desconhecido') + '</span>';
-    }
-  };
-  var s = document.createElement('script');
-  s.src = url + '?callback=' + cbName + '&t=' + Date.now();
-  s.onerror = function() {
-    clearTimeout(tm); delete window[cbName];
-    document.getElementById('config-url-status').innerHTML = '❌ <span style="color:#dc2626">Erro de rede — verifique a URL e se o acesso é "Qualquer pessoa"</span>';
-  };
-  document.head.appendChild(s);
-}
 // ============================================================
 
 
@@ -1610,25 +1548,38 @@ function cleanDateStr(s) {
   if (!s) return '';
   s = String(s).trim();
   if (!s || s === 'undefined' || s === 'null') return '';
-  // dd/mm/yyyy already
-  if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) return s.slice(0,10);
+  
   // 1899 = time-only, return empty
   if (s.startsWith('1899') || s.includes('Dec 30 1899') || s.includes('Dec 1899')) return '';
-  // ISO 2026-04-14T...
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) return m[3] + '/' + m[2] + '/' + m[1];
+
+  // Case 1: dd/mm/yyyy HH:mm or dd/mm/yyyy
+  if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) {
+    // Return full string if it has time, or just the date
+    return s.length > 10 ? s.slice(0, 16) : s.slice(0, 10);
   }
-  // JS toString: "Tue Apr 14 2026 14:15:20 GMT..."
+
+  // Case 2: ISO 2026-04-14T13:35...
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
+    if (m) {
+      var brDate = m[3] + '/' + m[2] + '/' + m[1];
+      if (m[4] && m[5]) return brDate + ' ' + m[4] + ':' + m[5];
+      return brDate;
+    }
+  }
+
+  // Case 3: JS toString: "Tue Apr 14 2026 14:15:20 GMT..."
   if (s.match(/\w{3} \w{3} \d{1,2} \d{4}/)) {
     try {
       var d = new Date(s);
       if (!isNaN(d.getTime()) && d.getFullYear() > 1900) {
-        var dd = String(d.getDate()).padStart(2,'0');
-        var mm = String(d.getMonth()+1).padStart(2,'0');
-        return dd + '/' + mm + '/' + d.getFullYear();
+        var dd = String(d.getDate()).padStart(2, '0');
+        var mm = String(d.getMonth() + 1).padStart(2, '0');
+        var hh = String(d.getHours()).padStart(2, '0');
+        var min = String(d.getMinutes()).padStart(2, '0');
+        return dd + '/' + mm + '/' + d.getFullYear() + ' ' + hh + ':' + min;
       }
-    } catch(e) {}
+    } catch (e) {}
     return '';
   }
   return s;
@@ -1678,7 +1629,19 @@ function saveLocal() {
 function loadLocal() {
   const stored = localStorage.getItem('prog_veiculo_v4');
   if (stored) {
-    progData = JSON.parse(stored);
+    var all = JSON.parse(stored);
+    // Filter out entries older than 24 hours
+    var cutoff = new Date();
+    cutoff.setHours(cutoff.getHours() - 24);
+    progData = all.filter(function(r) {
+      if (!r.gerado) return false;
+      var d = parseDateTimeBR(r.gerado);
+      return d && d > cutoff;
+    });
+    // If filtered some out, save back
+    if (progData.length !== all.length) {
+      localStorage.setItem('prog_veiculo_v4', JSON.stringify(progData));
+    }
   } else {
     progData = [];
   }
@@ -1702,7 +1665,7 @@ function sheetsGet() {
       delete window[cbName];
       if (script.parentNode) script.parentNode.removeChild(script);
       reject(new Error('Timeout ao conectar com o Google Sheets'));
-    }, 8000);
+    }, 15000);
 
     window[cbName] = function(json) {
       clearTimeout(timeout);
@@ -1817,32 +1780,10 @@ function loadData() {
         // Prevents wiping local cache when Sheets is temporarily empty
         if (records && records.length > 0) {
           var merged = deduplicar(records);
-
-          // Merge strategy: for records that exist in BOTH Sheets and local,
-          // prefer the one with the MOST RECENT 'gerado' timestamp (local edit wins if newer)
-          var sheetsMap = {};
-          merged.forEach(function(r) { sheetsMap[r._id] = r; });
-
-          var finalRecords = merged.slice(); // start with Sheets data
-
-          progData.forEach(function(localRec) {
-            var sheetsRec = sheetsMap[localRec._id];
-            if (!sheetsRec) {
-              // Record only in local (not yet synced to Sheets) - keep it
-              finalRecords.push(localRec);
-            } else {
-              // Record exists in both - prefer the one with newer 'gerado'
-              var localDate = parseDateTimeBR(localRec.gerado || '');
-              var sheetsDate = parseDateTimeBR(sheetsRec.gerado || '');
-              if (localDate && sheetsDate && localDate > sheetsDate) {
-                // Local is newer (just edited) - replace Sheets version
-                var idx = finalRecords.indexOf(sheetsRec);
-                if (idx >= 0) finalRecords[idx] = localRec;
-              }
-            }
-          });
-
-          progData = deduplicar(finalRecords);
+          // Keep local records not yet in Sheets (gerado today, not in response)
+          var sheetsIds = new Set(merged.map(function(r){return r._id;}));
+          var localOnly = progData.filter(function(r){ return !sheetsIds.has(r._id); });
+          progData = deduplicar(merged.concat(localOnly));
           nextId = Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1;
           saveLocal();
         }
@@ -1874,7 +1815,11 @@ function deduplicar(records) {
   const seen = new Map();
   [...records].reverse().forEach(r => {
     const key = r.destino + '|' + r.saida + '|' + r.dia + '|' + r.frota;
-    if (!seen.has(key)) seen.set(key, r);
+    const existing = seen.get(key);
+    // If we have a duplicate, prioritize the one that has a time in prev_fech (length > 10)
+    if (!existing || (r.prev_fech && String(r.prev_fech).length > String(existing.prev_fech).length)) {
+      seen.set(key, r);
+    }
   });
   return [...seen.values()].reverse();
 }
@@ -1993,9 +1938,12 @@ function showTab(tab) {
     }
   }
   if (tab === 'historico') {
-    const dtEl = document.getElementById('filter-hist-data');
-    if (dtEl && !dtEl.value) {
-      dtEl.value = toInputDate(new Date()); // default to today
+    const dtDe = document.getElementById('filter-hist-de');
+    const dtAte = document.getElementById('filter-hist-ate');
+    if (dtDe && !dtDe.value && dtAte && !dtAte.value) {
+      const hoje = getDataHoje();
+      dtDe.value = hoje;
+      dtAte.value = hoje;
     }
     renderHist();
   }
@@ -2280,7 +2228,7 @@ function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
     progData.push(rec);
   }
   const savedRec = progData.find(p => p._id === (existingId !== null ? existingId : nextId - 1));
-  saveData(savedRec).then ? saveData(savedRec) : null;
+  saveData(savedRec);
   renderProg();
   renderHist();
   showToast('Linha ' + destino + ' salva!', 'success');
@@ -2293,7 +2241,7 @@ function salvarTodos() {
     const ocupPct = parseInt(document.getElementById('ocup_' + r._rowId)?.value) || 0;
     const frota = document.getElementById('frota_' + r._rowId)?.value || '';
     const tipo = document.getElementById('tipo_' + r._rowId)?.value || 'Carro da Malha';
-    const prev_fech = fromDateOnly(document.getElementById('prev_' + r._rowId)?.value || '');
+    const prev_fech = fromDatetimeLocal(document.getElementById('prev_' + r._rowId)?.value || '');
     const obs = document.getElementById('obs_' + r._rowId)?.value || '';
     const tipo_prior = document.getElementById('prior_' + r._rowId)?.value || '';
     const data_crit = fromDateOnly(document.getElementById('crit_' + r._rowId)?.value || '');
@@ -2449,9 +2397,12 @@ function renderHist() {
   var filterAte = (document.getElementById('filter-hist-ate')?.value || '').trim();
 
   function parseBRDate(s) {
-    if (!s || s.length < 10) return null;
-    var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-    return m ? new Date(+m[3], +m[2]-1, +m[1]) : null;
+    if (!s) return null;
+    var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]), 0, 0, 0);
+    var m2 = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m2) return new Date(parseInt(m2[1]), parseInt(m2[2])-1, parseInt(m2[3]), 0, 0, 0);
+    return null;
   }
   var dDe = parseBRDate(filterDe);
   var dAte = parseBRDate(filterAte);
@@ -2462,30 +2413,17 @@ function renderHist() {
     if (tipo && r.tipo !== tipo) return false;
     // Date range filter
     if (dDe || dAte) {
-      var geradoStr = (r.gerado || '').substring(0, 10);
-      if (geradoStr) {
-        var gd = parseBRDate(geradoStr);
-        if (gd) {
-          if (dDe && gd < dDe) return false;
-          if (dAte && gd > dAte) return false;
-        }
-        // If gd is null (unparseable date), still show the record
-      }
+      var gd = parseBRDate((r.gerado || '').substring(0, 10));
+      if (!gd) return false;
+      if (dDe && gd < dDe) return false;
+      if (dAte && gd > dAte) return false;
     }
     if (search) {
       const s = (r.destino + r.frota + r.composicao + r.obs + r.dia).toLowerCase();
       if (!s.includes(search)) return false;
     }
     // Filter by generated date (avoid UTC timezone shift)
-    if (dataFiltro) {
-      const recDate = parseDateBR(r.gerado);
-      if (!recDate) return false;
-      // Parse yyyy-mm-dd directly to avoid UTC midnight offset issue
-      const [sY, sM, sD] = dataFiltro.split('-').map(Number);
-      if (recDate.getFullYear() !== sY ||
-          recDate.getMonth()+1 !== sM ||
-          recDate.getDate() !== sD) return false;
-    }
+    // Removed redundant dataFiltro check as it was causing conflicts with period filters
     return true;
   });
   // Sort by saida ascending
@@ -2843,9 +2781,11 @@ function saveEdit(id) {
   r.prev_fech = document.getElementById('e-prev_fech').value;
   r.tipo_prior = document.getElementById('e-tipo_prior').value;
   r.obs = document.getElementById('e-obs').value;
-  saveData();
+  r.gerado = now();
+  saveData(r);
   closeEditModal();
   renderProg();
+  renderHist();
   showToast('Registro atualizado!','success');
 }
 
@@ -2903,9 +2843,12 @@ function exportCSV(type) {
   var filterAte = (document.getElementById('filter-hist-ate')?.value || '').trim();
 
   function parseBRDate(s) {
-    if (!s || s.length < 10) return null;
-    var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-    return m ? new Date(+m[3], +m[2]-1, +m[1]) : null;
+    if (!s) return null;
+    var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]), 0, 0, 0);
+    var m2 = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m2) return new Date(parseInt(m2[1]), parseInt(m2[2])-1, parseInt(m2[3]), 0, 0, 0);
+    return null;
   }
   var dDe = parseBRDate(filterDe);
   var dAte = parseBRDate(filterAte);
@@ -3191,8 +3134,10 @@ function toInputDate(d) {
   return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
 }
 function limparFiltroData() {
-  const el = document.getElementById('filter-hist-data');
-  if (el) el.value = '';
+  const de = document.getElementById('filter-hist-de');
+  const ate = document.getElementById('filter-hist-ate');
+  if (de) de.value = '';
+  if (ate) ate.value = '';
   renderHist();
 }
 
@@ -3253,7 +3198,7 @@ function editProgramado(id) {
       '</div></div>' +
 
       '<div class="form-group"><label class="form-label">Prev. Fechamento</label>' +
-      '<input type="text" id="ep-prev" data-dtfmt="dt" placeholder="dd/mm/aaaa hh:mm" maxlength="16" style="font-size:13px;width:100%" value="' + toDateOnly(r.prev_fech) + '></div>' +
+      '<input type="text" id="ep-prev" data-dtfmt="dt" placeholder="dd/mm/aaaa hh:mm" maxlength="16" style="font-size:13px;width:100%" value="' + toDatetimeLocal(r.prev_fech) + '"></div>' +
 
       '<div class="form-group"><label class="form-label">Prioridade</label>' +
       '<select id="ep-prior">' + priorOpts + '</select></div>' +
@@ -3549,10 +3494,22 @@ function requestNotifPermission() {
 
 
 function syncManual() {
-  showSyncStatus('&#8635; Sincronizando...');
-  sheetsGetWithRetry(2)
+  // Antes de sincronizar, envia as alterações locais para o Sheets
+  showSyncStatus('&#8635; Enviando alterações...');
+  var localRecords = progData.map(recordToSheets);
+  sheetsPost('saveAll', { records: localRecords })
+    .then(function() {
+      showSyncStatus('&#8635; Buscando dados...');
+      return sheetsGetWithRetry(2);
+    })
     .then(function(records) {
-      progData = deduplicar(records);
+      if (records && records.length > 0) {
+        var merged = deduplicar(records);
+        // Preservar registros locais que ainda não chegaram ao Sheets
+        var sheetsIds = new Set(merged.map(function(r){ return r._id; }));
+        var localOnly = progData.filter(function(r){ return !sheetsIds.has(r._id); });
+        progData = deduplicar(merged.concat(localOnly));
+      }
       nextId = progData.length > 0 ? (Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1) : 4000;
       saveLocal(); renderProg(); renderHist(); hideSyncStatus();
       showToast('&#10003; ' + progData.length + ' sincronizados!', 'success');
@@ -4497,16 +4454,30 @@ window.addEventListener('resize', function() {
 
 // ===== IMPRIMIR PROGRAMADOS =====
 function imprimirProgramados() {
-  // Always print TODAY's data only
-  var hoje = getDataHoje();
-  var diaHoje = getDiaHoje();
+  // Respect the selected period filters
+  var filterDe = (document.getElementById('filter-hist-de')?.value || '').trim();
+  var filterAte = (document.getElementById('filter-hist-ate')?.value || '').trim();
+
+  function parseBRDate(s) {
+    if (!s) return null;
+    var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]), 0, 0, 0);
+    var m2 = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m2) return new Date(parseInt(m2[1]), parseInt(m2[2])-1, parseInt(m2[3]), 0, 0, 0);
+    return null;
+  }
+
+  var dDe = parseBRDate(filterDe);
+  var dAte = parseBRDate(filterAte);
+  if (dAte) dAte.setHours(23, 59, 59);
 
   var data = progData.filter(function(r) {
     if (!r.frota && !r.ocup) return false;
-    // Check if gerado is today
-    if (r.gerado) {
-      var geradoDate = r.gerado.substring(0, 10); // dd/MM/yyyy
-      if (geradoDate !== hoje) return false;
+    if (dDe || dAte) {
+      var gd = parseBRDate((r.gerado || '').substring(0, 10));
+      if (!gd) return false;
+      if (dDe && gd < dDe) return false;
+      if (dAte && gd > dAte) return false;
     }
     return true;
   });
@@ -4514,7 +4485,11 @@ function imprimirProgramados() {
   data.sort(function(a, b) { return (a.saida || '').localeCompare(b.saida || ''); });
 
   if (!data.length) {
-    showToast('Nenhum registro para hoje (' + hoje + ')', 'error');
+    var msg = 'Nenhum registro encontrado';
+    if (filterDe && filterAte) msg += ' no período ' + filterDe + ' á ' + filterAte;
+    else if (filterDe) msg += ' a partir de ' + filterDe;
+    else if (filterAte) msg += ' até ' + filterAte;
+    showToast(msg, 'error');
     return;
   }
 
@@ -5000,119 +4975,5 @@ function filtroSemana() {
 </div>
 
 
-
-<!-- CONFIG URL MODAL -->
-<div id="config-url-modal" style="
-  display:none;position:fixed;inset:0;z-index:99999;
-  background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);
-  align-items:center;justify-content:center;
-  font-family:Poppins,sans-serif;
-" onclick="if(event.target===this)fecharConfigUrl()">
-  <div style="
-    background:#fff;border-radius:16px;padding:28px 24px;
-    max-width:560px;width:92%;box-shadow:0 24px 64px rgba(0,0,0,.35);
-  ">
-    <div style="font-size:16px;font-weight:700;color:#111;margin-bottom:6px">⚙️ Configurar URL do Apps Script</div>
-    <div style="font-size:12px;color:#6b7280;margin-bottom:18px;line-height:1.6">
-      Cole aqui a URL gerada ao implantar o Apps Script no Google Sheets.<br>
-      <span style="color:#dc2626;font-weight:600">Após republicar o Apps Script, a URL muda — atualize aqui.</span>
-    </div>
-
-    <div style="margin-bottom:10px">
-      <label style="font-size:11px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:.06em">URL do Apps Script</label>
-      <textarea id="config-url-input" rows="3"
-        style="width:100%;margin-top:6px;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:12px;font-family:monospace;resize:vertical;outline:none;box-sizing:border-box"
-        placeholder="https://script.google.com/macros/s/.../exec"
-        onfocus="this.style.borderColor='#00B200'" onblur="this.style.borderColor='#d1d5db'"></textarea>
-    </div>
-
-    <div id="config-url-status" style="font-size:12px;min-height:20px;margin-bottom:14px"></div>
-
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button onclick="testarUrl()" style="
-        padding:9px 16px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;
-        border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif
-      ">🔍 Testar conexão</button>
-      <button onclick="salvarConfigUrl()" style="
-        padding:9px 20px;background:#00B200;color:#fff;border:none;
-        border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif
-      ">💾 Salvar e sincronizar</button>
-      <button onclick="fecharConfigUrl()" style="
-        padding:9px 14px;background:#fff;color:#6b7280;border:1px solid #d1d5db;
-        border-radius:8px;font-size:13px;cursor:pointer;font-family:Poppins,sans-serif
-      ">Cancelar</button>
-    </div>
-
-    <div style="margin-top:18px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px">
-      <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:8px">📋 COMO OBTER A URL CORRETA:</div>
-      <ol style="font-size:12px;color:#4b5563;line-height:1.8;padding-left:18px">
-        <li>Abra <strong>script.google.com</strong></li>
-        <li>Clique em <strong>Implantar → Gerenciar implantações</strong></li>
-        <li>Clique no <strong>lápis ✏️</strong> para editar</li>
-        <li>Em "Versão" selecione <strong>"Nova versão"</strong></li>
-        <li>Clique em <strong>Implantar</strong></li>
-        <li>Copie a URL e cole acima</li>
-        <li>Clique em <strong>"🔍 Testar conexão"</strong> para confirmar</li>
-      </ol>
-    </div>
-  </div>
-</div>
-
-<!-- CONFIG URL MODAL -->
-<div id="config-url-modal" style="
-  display:none;position:fixed;inset:0;z-index:99999;
-  background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);
-  align-items:center;justify-content:center;
-  font-family:Poppins,sans-serif;
-" onclick="if(event.target===this)fecharConfigUrl()">
-  <div style="
-    background:#fff;border-radius:16px;padding:28px 24px;
-    max-width:560px;width:92%;box-shadow:0 24px 64px rgba(0,0,0,.35);
-  ">
-    <div style="font-size:16px;font-weight:700;color:#111;margin-bottom:6px">⚙️ Configurar URL do Apps Script</div>
-    <div style="font-size:12px;color:#6b7280;margin-bottom:18px;line-height:1.6">
-      Cole aqui a URL gerada ao implantar o Apps Script no Google Sheets.<br>
-      <span style="color:#dc2626;font-weight:600">Após republicar o Apps Script, a URL muda — atualize aqui.</span>
-    </div>
-
-    <div style="margin-bottom:10px">
-      <label style="font-size:11px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:.06em">URL do Apps Script</label>
-      <textarea id="config-url-input" rows="3"
-        style="width:100%;margin-top:6px;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:12px;font-family:monospace;resize:vertical;outline:none;box-sizing:border-box"
-        placeholder="https://script.google.com/macros/s/.../exec"
-        onfocus="this.style.borderColor='#00B200'" onblur="this.style.borderColor='#d1d5db'"></textarea>
-    </div>
-
-    <div id="config-url-status" style="font-size:12px;min-height:20px;margin-bottom:14px"></div>
-
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button onclick="testarUrl()" style="
-        padding:9px 16px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;
-        border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif
-      ">🔍 Testar conexão</button>
-      <button onclick="salvarConfigUrl()" style="
-        padding:9px 20px;background:#00B200;color:#fff;border:none;
-        border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif
-      ">💾 Salvar e sincronizar</button>
-      <button onclick="fecharConfigUrl()" style="
-        padding:9px 14px;background:#fff;color:#6b7280;border:1px solid #d1d5db;
-        border-radius:8px;font-size:13px;cursor:pointer;font-family:Poppins,sans-serif
-      ">Cancelar</button>
-    </div>
-
-    <div style="margin-top:18px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px">
-      <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:8px">📋 COMO OBTER A URL CORRETA:</div>
-      <ol style="font-size:12px;color:#4b5563;line-height:1.8;padding-left:18px">
-        <li>Abra <strong>script.google.com</strong></li>
-        <li>Clique em <strong>Implantar → Gerenciar implantações</strong></li>
-        <li>Clique no <strong>lápis ✏️</strong> para editar</li>
-        <li>Em "Versão" selecione <strong>"Nova versão"</strong></li>
-        <li>Clique em <strong>Implantar</strong></li>
-        <li>Copie a URL e cole acima</li>
-        <li>Clique em <strong>"🔍 Testar conexão"</strong> para confirmar</li>
-      </ol>
-    </div>
-  </div>
-</div>
-
 </body>
+</html>
