@@ -2076,7 +2076,7 @@ function renderProg() {
       <td class="mono" style="font-size:11px">${r.composicao}</td>
       <td class="mono" style="color:#00B200;font-weight:600">${r.saida}</td>
       <td style="font-size:11px;color:var(--text2)">${r.dia}</td>
-      <td><input type="text" id="frota_${r._rowId}" value="${r.frota}" placeholder="Nº ou placa" style="width:140px;font-size:12px;font-family:monospace" oninput="debounceSave('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})"></td>
+      <td><input type="text" id="frota_${r._rowId}" value="${r.frota}" placeholder="Nº ou placa" style="width:140px;font-size:12px;font-family:monospace" onblur="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})"></td>
       <td><input type="datetime-local" id="prev_${r._rowId}" onchange="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})" value="${toDatetimeLocal(r.prev_fech)}" style="width:180px;font-size:11px"></td>
       <td><input type="text" id="obs_${r._rowId}" value="${r.obs}" placeholder="Observação..." style="width:148px;font-size:12px"></td>
       <td>
@@ -2281,7 +2281,7 @@ function selecionarTodos(checkbox) {
   var checkboxes = document.querySelectorAll('.hist-row-check');
   checkboxes.forEach(function(cb) {
     cb.checked = checkbox.checked;
-    var id = parseInt(cb.dataset.id);
+    var id = parseInt(cb.dataset.id, 10);
     if (checkbox.checked) _selectedIds.add(id);
     else _selectedIds.delete(id);
   });
@@ -2289,7 +2289,7 @@ function selecionarTodos(checkbox) {
 }
 
 function onRowCheck(checkbox) {
-  var id = parseInt(checkbox.dataset.id);
+  var id = parseInt(checkbox.dataset.id, 10);
   if (checkbox.checked) _selectedIds.add(id);
   else _selectedIds.delete(id);
   // Update select-all state
@@ -2319,19 +2319,37 @@ function atualizarBtnExcluir() {
 
 function excluirSelecionados() {
   if (_selectedIds.size === 0) return;
-  if (!confirm('Excluir ' + _selectedIds.size + ' registro(s) selecionado(s)?')) return;
-  _selectedIds.forEach(function(id) {
-    progData = progData.filter(function(r) { return r._id !== id; });
-    if (typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS) {
+  var count = _selectedIds.size;
+  if (!confirm('Excluir ' + count + ' registro(s) selecionado(s)?')) return;
+
+  // Collect IDs to delete as numbers (normalize)
+  var toDelete = [];
+  _selectedIds.forEach(function(id) { toDelete.push(parseInt(String(id), 10)); });
+
+  // Filter progData removing only the selected IDs
+  var before = progData.length;
+  progData = progData.filter(function(r) {
+    return toDelete.indexOf(parseInt(String(r._id), 10)) === -1;
+  });
+  var removed = before - progData.length;
+
+  // Delete from Sheets
+  toDelete.forEach(function(id) {
+    if (typeof sheetsPost === 'function' && typeof USAR_SHEETS !== 'undefined' && USAR_SHEETS) {
       sheetsPost('delete', { id: String(id) });
     }
   });
+
   _selectedIds.clear();
+  // Reset select-all checkbox
+  var selAll = document.getElementById('sel-all');
+  if (selAll) { selAll.checked = false; selAll.indeterminate = false; }
+
   saveLocal();
   renderHist();
   renderProg();
   atualizarBtnExcluir();
-  showToast('Registros excluídos!', 'success');
+  showToast('✅ ' + removed + ' registro(s) excluído(s)!', 'success');
 }
 
 function renderHist() {
