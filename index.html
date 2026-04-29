@@ -1921,9 +1921,12 @@ function showTab(tab) {
     }
   }
   if (tab === 'historico') {
-    const dtEl = document.getElementById('filter-hist-data');
-    if (dtEl && !dtEl.value) {
-      dtEl.value = toInputDate(new Date()); // default to today
+    const dtDe = document.getElementById('filter-hist-de');
+    const dtAte = document.getElementById('filter-hist-ate');
+    if (dtDe && !dtDe.value && dtAte && !dtAte.value) {
+      const hoje = getDataHoje();
+      dtDe.value = hoje;
+      dtAte.value = hoje;
     }
     renderHist();
   }
@@ -2377,9 +2380,12 @@ function renderHist() {
   var filterAte = (document.getElementById('filter-hist-ate')?.value || '').trim();
 
   function parseBRDate(s) {
-    if (!s || s.length < 10) return null;
-    var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-    return m ? new Date(+m[3], +m[2]-1, +m[1]) : null;
+    if (!s) return null;
+    var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]), 0, 0, 0);
+    var m2 = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m2) return new Date(parseInt(m2[1]), parseInt(m2[2])-1, parseInt(m2[3]), 0, 0, 0);
+    return null;
   }
   var dDe = parseBRDate(filterDe);
   var dAte = parseBRDate(filterAte);
@@ -2400,15 +2406,7 @@ function renderHist() {
       if (!s.includes(search)) return false;
     }
     // Filter by generated date (avoid UTC timezone shift)
-    if (dataFiltro) {
-      const recDate = parseDateBR(r.gerado);
-      if (!recDate) return false;
-      // Parse yyyy-mm-dd directly to avoid UTC midnight offset issue
-      const [sY, sM, sD] = dataFiltro.split('-').map(Number);
-      if (recDate.getFullYear() !== sY ||
-          recDate.getMonth()+1 !== sM ||
-          recDate.getDate() !== sD) return false;
-    }
+    // Removed redundant dataFiltro check as it was causing conflicts with period filters
     return true;
   });
   // Sort by saida ascending
@@ -2826,9 +2824,12 @@ function exportCSV(type) {
   var filterAte = (document.getElementById('filter-hist-ate')?.value || '').trim();
 
   function parseBRDate(s) {
-    if (!s || s.length < 10) return null;
-    var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-    return m ? new Date(+m[3], +m[2]-1, +m[1]) : null;
+    if (!s) return null;
+    var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]), 0, 0, 0);
+    var m2 = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m2) return new Date(parseInt(m2[1]), parseInt(m2[2])-1, parseInt(m2[3]), 0, 0, 0);
+    return null;
   }
   var dDe = parseBRDate(filterDe);
   var dAte = parseBRDate(filterAte);
@@ -3114,8 +3115,10 @@ function toInputDate(d) {
   return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
 }
 function limparFiltroData() {
-  const el = document.getElementById('filter-hist-data');
-  if (el) el.value = '';
+  const de = document.getElementById('filter-hist-de');
+  const ate = document.getElementById('filter-hist-ate');
+  if (de) de.value = '';
+  if (ate) ate.value = '';
   renderHist();
 }
 
@@ -4420,16 +4423,30 @@ window.addEventListener('resize', function() {
 
 // ===== IMPRIMIR PROGRAMADOS =====
 function imprimirProgramados() {
-  // Always print TODAY's data only
-  var hoje = getDataHoje();
-  var diaHoje = getDiaHoje();
+  // Respect the selected period filters
+  var filterDe = (document.getElementById('filter-hist-de')?.value || '').trim();
+  var filterAte = (document.getElementById('filter-hist-ate')?.value || '').trim();
+
+  function parseBRDate(s) {
+    if (!s) return null;
+    var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]), 0, 0, 0);
+    var m2 = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m2) return new Date(parseInt(m2[1]), parseInt(m2[2])-1, parseInt(m2[3]), 0, 0, 0);
+    return null;
+  }
+
+  var dDe = parseBRDate(filterDe);
+  var dAte = parseBRDate(filterAte);
+  if (dAte) dAte.setHours(23, 59, 59);
 
   var data = progData.filter(function(r) {
     if (!r.frota && !r.ocup) return false;
-    // Check if gerado is today
-    if (r.gerado) {
-      var geradoDate = r.gerado.substring(0, 10); // dd/MM/yyyy
-      if (geradoDate !== hoje) return false;
+    if (dDe || dAte) {
+      var gd = parseBRDate((r.gerado || '').substring(0, 10));
+      if (!gd) return false;
+      if (dDe && gd < dDe) return false;
+      if (dAte && gd > dAte) return false;
     }
     return true;
   });
@@ -4437,7 +4454,11 @@ function imprimirProgramados() {
   data.sort(function(a, b) { return (a.saida || '').localeCompare(b.saida || ''); });
 
   if (!data.length) {
-    showToast('Nenhum registro para hoje (' + hoje + ')', 'error');
+    var msg = 'Nenhum registro encontrado';
+    if (filterDe && filterAte) msg += ' no período ' + filterDe + ' á ' + filterAte;
+    else if (filterDe) msg += ' a partir de ' + filterDe;
+    else if (filterAte) msg += ' até ' + filterAte;
+    showToast(msg, 'error');
     return;
   }
 
