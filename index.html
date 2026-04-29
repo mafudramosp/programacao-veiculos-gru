@@ -1213,10 +1213,16 @@
       <option>Fora da Malha</option>
     </select>
     <div class="header-divider" style="height:20px;background:var(--border);margin:0 4px"></div>
-    <label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Gerado em:</label>
-    <input type="date" id="filter-hist-data" onchange="renderHist()"
-      style="width:145px;font-size:12px;font-weight:500">
-    <button class="btn btn-ghost btn-sm" onclick="limparFiltroData()" title="Ver todos" style="color:var(--text3);font-size:11px">✕</button>
+    <label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em">Período:</label>
+    <input type="text" id="filter-hist-de" placeholder="dd/mm/aaaa" maxlength="10" data-dtfmt="d"
+      oninput="renderHist()" style="width:110px;font-size:12px;font-weight:500;border:1px solid var(--border);border-radius:6px;padding:4px 8px">
+    <span style="font-size:11px;color:var(--text3);font-weight:600">até</span>
+    <input type="text" id="filter-hist-ate" placeholder="dd/mm/aaaa" maxlength="10" data-dtfmt="d"
+      oninput="renderHist()" style="width:110px;font-size:12px;font-weight:500;border:1px solid var(--border);border-radius:6px;padding:4px 8px">
+    <button class="btn btn-ghost btn-sm" onclick="limparFiltroData()" title="Limpar período" style="color:var(--text3);font-size:11px">✕</button>
+    <button class="btn btn-ghost btn-sm" onclick="filtroHoje()" style="font-size:11px" title="Ver registros de hoje">Hoje</button>
+    <button class="btn btn-ghost btn-sm" onclick="filtroOntem()" style="font-size:11px" title="Ver registros de ontem">Ontem</button>
+    <button class="btn btn-ghost btn-sm" onclick="filtroSemana()" style="font-size:11px" title="Ver últimos 7 dias">7 dias</button>
     <button id="btn-excluir-sel" class="btn btn-danger btn-sm" onclick="excluirSelecionados()" style="display:inline-flex;align-items:center;gap:5px;opacity:0.4;cursor:not-allowed" disabled>🗑 Excluir selecionados</button>
     <button class="btn btn-ghost btn-sm" onclick="exportCSV('programados')">📊 Exportar Excel</button>
       <button class="btn btn-ghost btn-sm" onclick="imprimirProgramados()">🖨️ Imprimir</button>
@@ -1929,37 +1935,37 @@ function getDataHoje() {
 
 // ===== DATETIME HELPERS =====
 function toDateOnly(brStr) {
-  // Convert "dd/mm/yyyy" or "dd/mm/yyyy hh:mm" to "yyyy-mm-dd" for date input
+  // For text inputs, return BR format directly
   if (!brStr || brStr === '—') return '';
-  const m = brStr.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
-  if (/^\d{4}-\d{2}-\d{2}/.test(brStr)) return brStr.slice(0,10);
-  return '';
+  if (/^\d{2}\/\d{2}\/\d{4}/.test(brStr)) return brStr.slice(0, 10); // "dd/MM/yyyy"
+  if (/^\d{4}-\d{2}-\d{2}/.test(brStr)) {
+    var m = brStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m[3] + '/' + m[2] + '/' + m[1];
+  }
+  return brStr;
 }
 function toDatetimeLocal(brStr) {
+  // For text inputs, just return the BR string directly
   if (!brStr || brStr === '—') return '';
-  // "dd/MM/yyyy HH:mm" format
-  var m = brStr.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
-  if (m) return m[3] + '-' + m[2] + '-' + m[1] + 'T' + m[4] + ':' + m[5];
-  // "dd/MM/yyyy" date only - add 00:00
-  var m2 = brStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-  if (m2) return m2[3] + '-' + m2[2] + '-' + m2[1] + 'T00:00';
-  // already ISO
-  if (brStr.includes('T')) return brStr.slice(0, 16);
-  return '';
+  return brStr; // already "dd/MM/yyyy HH:mm" or "dd/MM/yyyy"
 }
-function fromDatetimeLocal(isoStr) {
-  if (!isoStr) return '';
-  const m = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
-  if (m) return `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}`;
-  return isoStr;
+function fromDatetimeLocal(val) {
+  if (!val) return '';
+  // If already in BR format dd/MM/yyyy HH:mm → store as-is
+  if (/^\d{2}\/\d{2}\/\d{4}/.test(val)) return val;
+  // If ISO format yyyy-MM-ddTHH:mm → convert
+  var m = val.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (m) return m[3] + '/' + m[2] + '/' + m[1] + ' ' + m[4] + ':' + m[5];
+  return val;
 }
-function fromDateOnly(isoStr) {
-  // Convert "yyyy-mm-dd" to "dd/mm/yyyy"
-  if (!isoStr) return '';
-  const m = isoStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
-  return isoStr;
+function fromDateOnly(val) {
+  if (!val) return '';
+  // Already in dd/MM/yyyy → return as-is
+  if (/^\d{2}\/\d{2}\/\d{4}/.test(val)) return val.slice(0, 10);
+  // ISO yyyy-MM-dd → convert
+  var m = val.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[3] + '/' + m[2] + '/' + m[1];
+  return val;
 }
 
 // Build today's prog rows from grade + any saved edits
@@ -2037,6 +2043,7 @@ function renderProg() {
     <div class="stat-card"><span class="stat-label">Pendentes</span><span class="stat-value orange">${total - preenchidos}</span></div>
     <div class="stat-card"><span class="stat-label">100% Cheios</span><span class="stat-value green">${cheios}</span></div>
   `;
+  setTimeout(applyDTInputs, 100);
   document.getElementById('badge-prog').textContent = total;
 
   const tbody = document.getElementById('tbody-prog');
@@ -2077,7 +2084,7 @@ function renderProg() {
       <td class="mono" style="color:#00B200;font-weight:600">${r.saida}</td>
       <td style="font-size:11px;color:var(--text2)">${r.dia}</td>
       <td><input type="text" id="frota_${r._rowId}" value="${r.frota}" placeholder="Nº ou placa" style="width:140px;font-size:12px;font-family:monospace" onblur="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})"></td>
-      <td><input type="datetime-local" id="prev_${r._rowId}" onchange="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})" value="${toDatetimeLocal(r.prev_fech)}" style="width:180px;font-size:11px"></td>
+      <td><input type="text" id="prev_${r._rowId}" data-dtfmt="dt" placeholder="dd/mm/aaaa hh:mm" maxlength="16" onblur="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})" value="${r.prev_fech || ''}" style="width:180px;font-size:11px"></td>
       <td><input type="text" id="obs_${r._rowId}" value="${r.obs}" placeholder="Observação..." style="width:148px;font-size:12px"></td>
       <td>
         <select id="prior_${r._rowId}" onchange="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})" style="font-size:11px;padding:3px 6px;width:100px">
@@ -2087,7 +2094,7 @@ function renderProg() {
           <option value="Baixa" ${r.tipo_prior==='Baixa'?'selected':''}>🟢 Baixa</option>
         </select>
       </td>
-      <td><input type="date" id="crit_${r._rowId}" onchange="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})" value="${toDateOnly(r.data_crit)}" style="width:145px;font-size:12px"></td>
+      <td><input type="text" id="crit_${r._rowId}" data-dtfmt="d" placeholder="dd/mm/aaaa" maxlength="10" onblur="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})" value="${r.data_crit || ''}" style="width:145px;font-size:12px"></td>
       
     </tr>`;
   }).join('');
@@ -2356,11 +2363,28 @@ function renderHist() {
   const search = (document.getElementById('search-hist')?.value || '').toLowerCase();
   const tipo = document.getElementById('filter-hist-tipo')?.value || '';
   // Only show user-saved records (have frota OR ocup > 0)
-  const dataFiltro = document.getElementById('filter-hist-data')?.value || '';
+  var filterDe = (document.getElementById('filter-hist-de')?.value || '').trim();
+  var filterAte = (document.getElementById('filter-hist-ate')?.value || '').trim();
+
+  function parseBRDate(s) {
+    if (!s || s.length < 10) return null;
+    var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    return m ? new Date(+m[3], +m[2]-1, +m[1]) : null;
+  }
+  var dDe = parseBRDate(filterDe);
+  var dAte = parseBRDate(filterAte);
+  if (dAte) dAte.setHours(23,59,59);
 
   let data = progData.filter(r => {
     if (!r.frota && !r.ocup) return false;
     if (tipo && r.tipo !== tipo) return false;
+    // Date range filter
+    if (dDe || dAte) {
+      var gd = parseBRDate((r.gerado || '').substring(0, 10));
+      if (!gd) return false;
+      if (dDe && gd < dDe) return false;
+      if (dAte && gd > dAte) return false;
+    }
     if (search) {
       const s = (r.destino + r.frota + r.composicao + r.obs + r.dia).toLowerCase();
       if (!s.includes(search)) return false;
@@ -2807,7 +2831,9 @@ populateFilters();
 renderProg();
 renderGrade();
 renderHist();
+setTimeout(applyDTInputs, 500);
 setInterval(updateClock, 1000);
+setInterval(applyDTInputs, 2000); // Re-apply after renders
 updateClock();
 
 // checkHorarios and requestNotifPermission called after definition below
@@ -3085,13 +3111,13 @@ function editProgramado(id) {
       '</div></div>' +
 
       '<div class="form-group"><label class="form-label">Prev. Fechamento</label>' +
-      '<input type="datetime-local" id="ep-prev" style="font-size:13px;width:100%" value="' + toDateOnly(r.prev_fech) + '></div>' +
+      '<input type="text" id="ep-prev" data-dtfmt="dt" placeholder="dd/mm/aaaa hh:mm" maxlength="16" style="font-size:13px;width:100%" value="' + toDateOnly(r.prev_fech) + '></div>' +
 
       '<div class="form-group"><label class="form-label">Prioridade</label>' +
       '<select id="ep-prior">' + priorOpts + '</select></div>' +
 
       '<div class="form-group"><label class="form-label">Data Crítica</label>' +
-      '<input type="date" id="ep-crit" value="' + toDateOnly(r.data_crit) + '"></div>' +
+      '<input type="text" id="ep-crit" data-dtfmt="d" placeholder="dd/mm/aaaa" maxlength="10" value="' + (r.data_crit || '') + '"></div>' +
 
       '<div class="form-group" style="grid-column:span 2"><label class="form-label">Observação</label>' +
       '<textarea id="ep-obs" rows="2" style="resize:vertical">' + (r.obs||'') + '</textarea></div>' +
@@ -3126,9 +3152,9 @@ function saveEditProgramado(id) {
   r.tipo       = document.getElementById('ep-tipo').value;
   r.frota      = document.getElementById('ep-frota').value;
   r.ocup       = (parseInt(document.getElementById('ep-ocup').value)||0) / 100;
-  r.prev_fech  = fromDatetimeLocal(document.getElementById('ep-prev').value || '');
+  r.prev_fech  = document.getElementById('ep-prev').value || '';
   r.tipo_prior = document.getElementById('ep-prior').value;
-  r.data_crit  = fromDateOnly(document.getElementById('ep-crit').value);
+  r.data_crit  = document.getElementById('ep-crit').value || '';
   r.obs        = document.getElementById('ep-obs').value;
   r.gerado     = now();
   saveData(r);
@@ -4660,6 +4686,64 @@ document.addEventListener('click', function(e) {
   var modal = document.getElementById('wa-modal');
   if (modal && e.target === modal) fecharWAModal();
 });
+
+
+function autoFormatDT(input, isDatetime) {
+  var raw = input.value.replace(/[^0-9]/g, '');
+  var max = isDatetime ? 12 : 8;
+  if (raw.length > max) raw = raw.slice(0, max);
+  var out = '';
+  for (var i = 0; i < raw.length; i++) {
+    if (i === 2 || i === 4) out += '/';
+    if (isDatetime && i === 8) out += ' ';
+    if (isDatetime && i === 10) out += ':';
+    out += raw[i];
+  }
+  if (input.value !== out) input.value = out;
+}
+function applyDTInputs() {
+  document.querySelectorAll('input[data-dtfmt]').forEach(function(inp) {
+    if (inp._dtBound) return;
+    inp._dtBound = true;
+    var isDT = inp.getAttribute('data-dtfmt') === 'dt';
+    inp.addEventListener('input', function() { autoFormatDT(this, isDT); });
+    inp.addEventListener('keydown', function(e) {
+      if ([8,9,46,37,38,39,40].indexOf(e.keyCode) >= 0) return;
+      if (e.ctrlKey || e.metaKey) return;
+      if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+    });
+  });
+}
+setInterval(applyDTInputs, 800);
+
+function filtroHoje() {
+  var hoje = getDataHoje();
+  var de = document.getElementById('filter-hist-de');
+  var ate = document.getElementById('filter-hist-ate');
+  if (de) de.value = hoje;
+  if (ate) ate.value = hoje;
+  renderHist();
+}
+function filtroOntem() {
+  var d = new Date(); d.setDate(d.getDate() - 1);
+  var pad = function(n) { return String(n).padStart(2,'0'); };
+  var ontem = pad(d.getDate()) + '/' + pad(d.getMonth()+1) + '/' + d.getFullYear();
+  var de = document.getElementById('filter-hist-de');
+  var ate = document.getElementById('filter-hist-ate');
+  if (de) de.value = ontem;
+  if (ate) ate.value = ontem;
+  renderHist();
+}
+function filtroSemana() {
+  var d = new Date(); d.setDate(d.getDate() - 6);
+  var pad = function(n) { return String(n).padStart(2,'0'); };
+  var inicio = pad(d.getDate()) + '/' + pad(d.getMonth()+1) + '/' + d.getFullYear();
+  var de = document.getElementById('filter-hist-de');
+  var ate = document.getElementById('filter-hist-ate');
+  if (de) de.value = inicio;
+  if (ate) ate.value = getDataHoje();
+  renderHist();
+}
 
 </script>
 <!-- ============================================================ -->
