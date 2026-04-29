@@ -1616,19 +1616,7 @@ function saveLocal() {
 function loadLocal() {
   const stored = localStorage.getItem('prog_veiculo_v4');
   if (stored) {
-    var all = JSON.parse(stored);
-    // Filter out entries older than 24 hours
-    var cutoff = new Date();
-    cutoff.setHours(cutoff.getHours() - 24);
-    progData = all.filter(function(r) {
-      if (!r.gerado) return false;
-      var d = parseDateTimeBR(r.gerado);
-      return d && d > cutoff;
-    });
-    // If filtered some out, save back
-    if (progData.length !== all.length) {
-      localStorage.setItem('prog_veiculo_v4', JSON.stringify(progData));
-    }
+    progData = JSON.parse(stored);
   } else {
     progData = [];
   }
@@ -2412,10 +2400,15 @@ function renderHist() {
     if (tipo && r.tipo !== tipo) return false;
     // Date range filter
     if (dDe || dAte) {
-      var gd = parseBRDate((r.gerado || '').substring(0, 10));
-      if (!gd) return false;
-      if (dDe && gd < dDe) return false;
-      if (dAte && gd > dAte) return false;
+      var geradoStr = (r.gerado || '').substring(0, 10);
+      if (geradoStr) {
+        var gd = parseBRDate(geradoStr);
+        if (gd) {
+          if (dDe && gd < dDe) return false;
+          if (dAte && gd > dAte) return false;
+        }
+        // If gd is null (unparseable date), still show the record
+      }
     }
     if (search) {
       const s = (r.destino + r.frota + r.composicao + r.obs + r.dia).toLowerCase();
