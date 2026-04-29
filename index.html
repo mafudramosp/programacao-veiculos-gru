@@ -1763,15 +1763,25 @@ function loadData() {
     showSyncStatus('&#8635; Sincronizando...');
     sheetsGetWithRetry(3)
       .then(function(records) {
-        progData = deduplicar(records);
-        nextId = progData.length > 0 ? (Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1) : 4000;
-        saveLocal(); renderProg(); renderHist(); hideSyncStatus();
-        showToast('&#10003; ' + progData.length + ' registros carregados', 'success');
+        // Only overwrite local data if Sheets returned something
+        // Prevents wiping local cache when Sheets is temporarily empty
+        if (records && records.length > 0) {
+          var merged = deduplicar(records);
+          // Keep local records not yet in Sheets (gerado today, not in response)
+          var sheetsIds = new Set(merged.map(function(r){return r._id;}));
+          var localOnly = progData.filter(function(r){ return !sheetsIds.has(r._id); });
+          progData = deduplicar(merged.concat(localOnly));
+          nextId = Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1;
+          saveLocal();
+        }
+        renderProg(); renderHist(); hideSyncStatus();
+        showToast('✅ Sincronizado — ' + progData.length + ' registros', 'success');
       })
       .catch(function(e) {
         hideSyncStatus();
-        showToast('⚠️ Sheets offline — dados locais', 'error');
+        // Don't clear data on error - keep local cache
         console.warn('Sheets offline:', e.message);
+        showToast('📡 Sem conexão com Sheets — usando dados locais', 'info');
       });
   }
 }
