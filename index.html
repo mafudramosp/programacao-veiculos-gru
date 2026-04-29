@@ -932,6 +932,14 @@
     onmouseout="this.style.background='none'">
     ⟳ Sheets
   </button>
+  <button onclick="abrirConfigUrl()" title="Configurar URL do Apps Script"
+    style="background:none;border:none;cursor:pointer;color:#6b7280;font-size:11px;
+    font-family:Poppins,sans-serif;padding:4px 8px;border-radius:6px;
+    transition:all 0.15s;display:inline-flex;align-items:center;gap:4px"
+    onmouseover="this.style.background='rgba(255,255,255,0.08)'"
+    onmouseout="this.style.background='none'">
+    ⚙️ URL
+  </button>
   <div style="margin-left:auto"></div>
   <button id="notif-bell" onclick="toggleNotifPanel()" title="Alertas de horário" style="
     background:none;border:none;cursor:pointer;position:relative;
@@ -1538,8 +1546,62 @@
 // ============================================================
 // CONFIGURAÇÃO DO GOOGLE SHEETS (preencha após implantar o Apps Script)
 // ============================================================
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbztb45wzjjBY24Ep_GJysK6DyjeEOSf_zMa0xREBJjZomBmYRSL4SlsOTZ9JOOJdY_1Pg/exec';
+// URL saved in localStorage overrides the default
+var _DEFAULT_URL = 'https://script.google.com/macros/s/AKfycbztb45wzjjBY24Ep_GJysK6DyjeEOSf_zMa0xREBJjZomBmYRSL4SlsOTZ9JOOJdY_1Pg/exec';
+var APPS_SCRIPT_URL = localStorage.getItem('pvg_apps_script_url') || _DEFAULT_URL;
 var USAR_SHEETS = true;
+
+function abrirConfigUrl() {
+  var modal = document.getElementById('config-url-modal');
+  if (modal) {
+    document.getElementById('config-url-input').value = APPS_SCRIPT_URL;
+    modal.style.display = 'flex';
+    setTimeout(function(){ document.getElementById('config-url-input').focus(); }, 200);
+  }
+}
+function fecharConfigUrl() {
+  var modal = document.getElementById('config-url-modal');
+  if (modal) modal.style.display = 'none';
+}
+function salvarConfigUrl() {
+  var input = document.getElementById('config-url-input');
+  var url = (input.value || '').trim();
+  if (!url || !url.includes('script.google.com')) {
+    showToast('URL inválida. Deve ser do script.google.com', 'error');
+    return;
+  }
+  APPS_SCRIPT_URL = url;
+  localStorage.setItem('pvg_apps_script_url', url);
+  fecharConfigUrl();
+  showToast('✅ URL salva! Sincronizando...', 'success');
+  setTimeout(syncManual, 800);
+}
+function testarUrl() {
+  var input = document.getElementById('config-url-input');
+  var url = (input.value || '').trim();
+  if (!url) return;
+  showToast('🔍 Testando conexão...', 'info');
+  var cbName = 'testCb_' + Date.now();
+  var tm = setTimeout(function() {
+    delete window[cbName];
+    document.getElementById('config-url-status').innerHTML = '❌ <span style="color:#dc2626">Timeout — URL inválida ou Apps Script não republicado</span>';
+  }, 8000);
+  window[cbName] = function(json) {
+    clearTimeout(tm); delete window[cbName];
+    if (json && json.status === 'ok') {
+      document.getElementById('config-url-status').innerHTML = '✅ <span style="color:#16a34a">Conexão OK! ' + (json.records ? json.records.length : 0) + ' registros encontrados.</span>';
+    } else {
+      document.getElementById('config-url-status').innerHTML = '⚠️ <span style="color:#ca8a04">Resposta com erro: ' + (json && json.message ? json.message : 'desconhecido') + '</span>';
+    }
+  };
+  var s = document.createElement('script');
+  s.src = url + '?callback=' + cbName + '&t=' + Date.now();
+  s.onerror = function() {
+    clearTimeout(tm); delete window[cbName];
+    document.getElementById('config-url-status').innerHTML = '❌ <span style="color:#dc2626">Erro de rede — verifique a URL e se o acesso é "Qualquer pessoa"</span>';
+  };
+  document.head.appendChild(s);
+}
 // ============================================================
 
 
@@ -1640,7 +1702,7 @@ function sheetsGet() {
       delete window[cbName];
       if (script.parentNode) script.parentNode.removeChild(script);
       reject(new Error('Timeout ao conectar com o Google Sheets'));
-    }, 15000);
+    }, 8000);
 
     window[cbName] = function(json) {
       clearTimeout(timeout);
@@ -4938,5 +5000,119 @@ function filtroSemana() {
 </div>
 
 
+
+<!-- CONFIG URL MODAL -->
+<div id="config-url-modal" style="
+  display:none;position:fixed;inset:0;z-index:99999;
+  background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);
+  align-items:center;justify-content:center;
+  font-family:Poppins,sans-serif;
+" onclick="if(event.target===this)fecharConfigUrl()">
+  <div style="
+    background:#fff;border-radius:16px;padding:28px 24px;
+    max-width:560px;width:92%;box-shadow:0 24px 64px rgba(0,0,0,.35);
+  ">
+    <div style="font-size:16px;font-weight:700;color:#111;margin-bottom:6px">⚙️ Configurar URL do Apps Script</div>
+    <div style="font-size:12px;color:#6b7280;margin-bottom:18px;line-height:1.6">
+      Cole aqui a URL gerada ao implantar o Apps Script no Google Sheets.<br>
+      <span style="color:#dc2626;font-weight:600">Após republicar o Apps Script, a URL muda — atualize aqui.</span>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:11px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:.06em">URL do Apps Script</label>
+      <textarea id="config-url-input" rows="3"
+        style="width:100%;margin-top:6px;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:12px;font-family:monospace;resize:vertical;outline:none;box-sizing:border-box"
+        placeholder="https://script.google.com/macros/s/.../exec"
+        onfocus="this.style.borderColor='#00B200'" onblur="this.style.borderColor='#d1d5db'"></textarea>
+    </div>
+
+    <div id="config-url-status" style="font-size:12px;min-height:20px;margin-bottom:14px"></div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="testarUrl()" style="
+        padding:9px 16px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;
+        border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif
+      ">🔍 Testar conexão</button>
+      <button onclick="salvarConfigUrl()" style="
+        padding:9px 20px;background:#00B200;color:#fff;border:none;
+        border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif
+      ">💾 Salvar e sincronizar</button>
+      <button onclick="fecharConfigUrl()" style="
+        padding:9px 14px;background:#fff;color:#6b7280;border:1px solid #d1d5db;
+        border-radius:8px;font-size:13px;cursor:pointer;font-family:Poppins,sans-serif
+      ">Cancelar</button>
+    </div>
+
+    <div style="margin-top:18px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px">
+      <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:8px">📋 COMO OBTER A URL CORRETA:</div>
+      <ol style="font-size:12px;color:#4b5563;line-height:1.8;padding-left:18px">
+        <li>Abra <strong>script.google.com</strong></li>
+        <li>Clique em <strong>Implantar → Gerenciar implantações</strong></li>
+        <li>Clique no <strong>lápis ✏️</strong> para editar</li>
+        <li>Em "Versão" selecione <strong>"Nova versão"</strong></li>
+        <li>Clique em <strong>Implantar</strong></li>
+        <li>Copie a URL e cole acima</li>
+        <li>Clique em <strong>"🔍 Testar conexão"</strong> para confirmar</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIG URL MODAL -->
+<div id="config-url-modal" style="
+  display:none;position:fixed;inset:0;z-index:99999;
+  background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);
+  align-items:center;justify-content:center;
+  font-family:Poppins,sans-serif;
+" onclick="if(event.target===this)fecharConfigUrl()">
+  <div style="
+    background:#fff;border-radius:16px;padding:28px 24px;
+    max-width:560px;width:92%;box-shadow:0 24px 64px rgba(0,0,0,.35);
+  ">
+    <div style="font-size:16px;font-weight:700;color:#111;margin-bottom:6px">⚙️ Configurar URL do Apps Script</div>
+    <div style="font-size:12px;color:#6b7280;margin-bottom:18px;line-height:1.6">
+      Cole aqui a URL gerada ao implantar o Apps Script no Google Sheets.<br>
+      <span style="color:#dc2626;font-weight:600">Após republicar o Apps Script, a URL muda — atualize aqui.</span>
+    </div>
+
+    <div style="margin-bottom:10px">
+      <label style="font-size:11px;font-weight:600;color:#374151;text-transform:uppercase;letter-spacing:.06em">URL do Apps Script</label>
+      <textarea id="config-url-input" rows="3"
+        style="width:100%;margin-top:6px;padding:10px;border:1.5px solid #d1d5db;border-radius:8px;font-size:12px;font-family:monospace;resize:vertical;outline:none;box-sizing:border-box"
+        placeholder="https://script.google.com/macros/s/.../exec"
+        onfocus="this.style.borderColor='#00B200'" onblur="this.style.borderColor='#d1d5db'"></textarea>
+    </div>
+
+    <div id="config-url-status" style="font-size:12px;min-height:20px;margin-bottom:14px"></div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="testarUrl()" style="
+        padding:9px 16px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;
+        border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif
+      ">🔍 Testar conexão</button>
+      <button onclick="salvarConfigUrl()" style="
+        padding:9px 20px;background:#00B200;color:#fff;border:none;
+        border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:Poppins,sans-serif
+      ">💾 Salvar e sincronizar</button>
+      <button onclick="fecharConfigUrl()" style="
+        padding:9px 14px;background:#fff;color:#6b7280;border:1px solid #d1d5db;
+        border-radius:8px;font-size:13px;cursor:pointer;font-family:Poppins,sans-serif
+      ">Cancelar</button>
+    </div>
+
+    <div style="margin-top:18px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px">
+      <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:8px">📋 COMO OBTER A URL CORRETA:</div>
+      <ol style="font-size:12px;color:#4b5563;line-height:1.8;padding-left:18px">
+        <li>Abra <strong>script.google.com</strong></li>
+        <li>Clique em <strong>Implantar → Gerenciar implantações</strong></li>
+        <li>Clique no <strong>lápis ✏️</strong> para editar</li>
+        <li>Em "Versão" selecione <strong>"Nova versão"</strong></li>
+        <li>Clique em <strong>Implantar</strong></li>
+        <li>Copie a URL e cole acima</li>
+        <li>Clique em <strong>"🔍 Testar conexão"</strong> para confirmar</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
 </body>
-</html>
