@@ -2211,7 +2211,7 @@ function salvarLinha(rowId, destino, saida, dia, existingId, silent) {
     progData.push(rec);
   }
   const savedRec = progData.find(p => p._id === (existingId !== null ? existingId : nextId - 1));
-  saveData(savedRec).then ? saveData(savedRec) : null;
+  saveData(savedRec);
   renderProg();
   renderHist();
   showToast('Linha ' + destino + ' salva!', 'success');
@@ -2764,9 +2764,11 @@ function saveEdit(id) {
   r.prev_fech = document.getElementById('e-prev_fech').value;
   r.tipo_prior = document.getElementById('e-tipo_prior').value;
   r.obs = document.getElementById('e-obs').value;
-  saveData();
+  r.gerado = now();
+  saveData(r);
   closeEditModal();
   renderProg();
+  renderHist();
   showToast('Registro atualizado!','success');
 }
 
@@ -3179,7 +3181,7 @@ function editProgramado(id) {
       '</div></div>' +
 
       '<div class="form-group"><label class="form-label">Prev. Fechamento</label>' +
-      '<input type="text" id="ep-prev" data-dtfmt="dt" placeholder="dd/mm/aaaa hh:mm" maxlength="16" style="font-size:13px;width:100%" value="' + toDateOnly(r.prev_fech) + '></div>' +
+      '<input type="text" id="ep-prev" data-dtfmt="dt" placeholder="dd/mm/aaaa hh:mm" maxlength="16" style="font-size:13px;width:100%" value="' + toDatetimeLocal(r.prev_fech) + '"></div>' +
 
       '<div class="form-group"><label class="form-label">Prioridade</label>' +
       '<select id="ep-prior">' + priorOpts + '</select></div>' +
@@ -3475,10 +3477,22 @@ function requestNotifPermission() {
 
 
 function syncManual() {
-  showSyncStatus('&#8635; Sincronizando...');
-  sheetsGetWithRetry(2)
+  // Antes de sincronizar, envia as alterações locais para o Sheets
+  showSyncStatus('&#8635; Enviando alterações...');
+  var localRecords = progData.map(recordToSheets);
+  sheetsPost('saveAll', { records: localRecords })
+    .then(function() {
+      showSyncStatus('&#8635; Buscando dados...');
+      return sheetsGetWithRetry(2);
+    })
     .then(function(records) {
-      progData = deduplicar(records);
+      if (records && records.length > 0) {
+        var merged = deduplicar(records);
+        // Preservar registros locais que ainda não chegaram ao Sheets
+        var sheetsIds = new Set(merged.map(function(r){ return r._id; }));
+        var localOnly = progData.filter(function(r){ return !sheetsIds.has(r._id); });
+        progData = deduplicar(merged.concat(localOnly));
+      }
       nextId = progData.length > 0 ? (Math.max.apply(null, progData.map(function(r){return r._id||0;})) + 1) : 4000;
       saveLocal(); renderProg(); renderHist(); hideSyncStatus();
       showToast('&#10003; ' + progData.length + ' sincronizados!', 'success');
