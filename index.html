@@ -2808,20 +2808,75 @@ function exportCSV(type) {
     showToast('Aguarde carregamento...', 'info');
     return;
   }
-  var data = progData.filter(function(r) { return r.frota || r.ocup; });
-  if (!data.length) { showToast('Nenhum dado para exportar', 'error'); return; }
 
-  var headers = ['Gerado Em','Destino','Regiao','Composicao','Saida','Dia','Tipo','Frota','Ocupacao %','Prev. Fechamento','Observacao','Data Critica','Prioridade'];
+  // Apply same filters as the Programados table
+  var search = (document.getElementById('search-hist')?.value || '').toLowerCase();
+  var tipo = document.getElementById('filter-hist-tipo')?.value || '';
+  var filterDe = (document.getElementById('filter-hist-de')?.value || '').trim();
+  var filterAte = (document.getElementById('filter-hist-ate')?.value || '').trim();
+
+  function parseBRDate(s) {
+    if (!s || s.length < 10) return null;
+    var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    return m ? new Date(+m[3], +m[2]-1, +m[1]) : null;
+  }
+  var dDe = parseBRDate(filterDe);
+  var dAte = parseBRDate(filterAte);
+  if (dAte) dAte.setHours(23, 59, 59);
+
+  var data = progData.filter(function(r) {
+    if (!r.frota && !r.ocup) return false;
+    if (tipo && r.tipo !== tipo) return false;
+    if (dDe || dAte) {
+      var gd = parseBRDate((r.gerado || '').substring(0, 10));
+      if (!gd) return false;
+      if (dDe && gd < dDe) return false;
+      if (dAte && gd > dAte) return false;
+    }
+    if (search) {
+      var s = (r.destino + r.frota + r.composicao + r.obs + r.dia).toLowerCase();
+      if (s.indexOf(search) < 0) return false;
+    }
+    return true;
+  });
+
+  if (!data.length) { showToast('Nenhum dado para exportar no período selecionado', 'error'); return; }
+
+  // Sort same as table: prev_fech first
+  data.sort(function(a, b) {
+    var pa = a.prev_fech || '', pb = b.prev_fech || '';
+    if (pa && !pb) return -1;
+    if (!pa && pb) return 1;
+    if (pa && pb) {
+      var da = parseBRDate(pa), db = parseBRDate(pb);
+      if (da && db) return da - db;
+    }
+    return (a.saida || '').localeCompare(b.saida || '');
+  });
+
+  // Build filename from period
+  var periodoLabel = '';
+  if (filterDe && filterAte) periodoLabel = '_' + filterDe.replace(/\//g,'-') + '_a_' + filterAte.replace(/\//g,'-');
+  else if (filterDe) periodoLabel = '_a_partir_' + filterDe.replace(/\//g,'-');
+  else if (filterAte) periodoLabel = '_ate_' + filterAte.replace(/\//g,'-');
+  else periodoLabel = '_' + getDataHoje().replace(/\//g,'-');
+
+  var headers = ['Gerado Em','Destino','Região','Composição','Saída','Dia','Tipo','Frota','Ocupação %','Prev. Fechamento','Observação','Data Crítica','Prioridade'];
   var rows = data.map(function(r) {
-    return [r.gerado||'',r.destino||'',r.regiao||'',r.composicao||'',r.saida||'',r.dia||'',r.tipo||'',r.frota||'',Math.round((r.ocup||0)*100),r.prev_fech||'',r.obs||'',r.data_crit||'',r.tipo_prior||''];
+    return [
+      r.gerado||'', r.destino||'', r.regiao||'', r.composicao||'',
+      r.saida||'', r.dia||'', r.tipo||'', r.frota||'',
+      Math.round((r.ocup||0)*100), r.prev_fech||'', r.obs||'',
+      r.data_crit||'', r.tipo_prior||''
+    ];
   });
 
   var ws = XLSX.utils.aoa_to_sheet([headers].concat(rows));
-  ws['!cols'] = [{wch:18},{wch:10},{wch:14},{wch:30},{wch:8},{wch:14},{wch:16},{wch:14},{wch:12},{wch:20},{wch:30},{wch:14},{wch:12}];
+  ws['!cols'] = [{wch:18},{wch:10},{wch:14},{wch:30},{wch:8},{wch:14},{wch:16},{wch:14},{wch:11},{wch:20},{wch:30},{wch:14},{wch:12}];
   var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Programacao GRU');
-  XLSX.writeFile(wb, 'Programacao_GRU_' + getDataHoje().replace(/\//g,'-') + '.xlsx');
-  showToast('Excel exportado!', 'success');
+  XLSX.utils.book_append_sheet(wb, ws, 'Programados GRU');
+  XLSX.writeFile(wb, 'Programados_GRU' + periodoLabel + '.xlsx');
+  showToast('✅ Excel exportado — ' + data.length + ' registros!', 'success');
 }
 
 
