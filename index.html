@@ -549,7 +549,6 @@
     .header-sub { font-size: 10px; }
     .header-divider { display: none; }
     .header-clock { font-size: 11px; margin-left: 0; order: 10; width: 100%; }
-    .header-credit { display: none; }
 
     .nav { overflow-x: auto; padding: 0 10px; gap: 0; flex-wrap: nowrap; }
     .nav-btn { padding: 8px 12px; font-size: 11px; flex-shrink: 0; }
@@ -948,11 +947,7 @@
       font-family:'Poppins',sans-serif;line-height:1;
     ">0</span>
   </button>
-  <div class="header-credit" style="text-align:right;line-height:1.5">
-    <div style="font-size:11px;font-weight:600;color:#d1d5db">Produzido por: <span style="color:#00CC00">Patrick Mafud Ramos</span></div>
-    <div style="font-size:10px;color:var(--text3)">(11) 93322-6881 · <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d6a6b7a2a4bfb5bdf8a4b7bbb9a596b9a3a2bab9b9bdf8b5b9bbf8b4a4">[email&#160;protected]</a></div>
-    <div style="font-size:9px;color:#6b7280;font-style:italic">Sistemas · Planilhas · Dashboards · Aplicativos</div>
-  </div>
+
 </div>
 
 <div class="nav">
@@ -1026,7 +1021,7 @@
         <thead>
           <tr>
             <th style="width:36px">#</th>
-            <th style="width:130px">Ocupação %</th>
+            <th style="width:130px">Status Carregamento</th>
             <th style="width:130px">Tipo</th>
             <th style="width:70px">Destino</th>
             <th style="width:100px">Região</th>
@@ -1252,7 +1247,7 @@
             <th onclick="sortHist('saida')" style="cursor:pointer" title="Ordenar">Saída <span id="sh-saida">↕</span></th>
             <th>Dia</th>
             <th onclick="sortHist('frota')" style="cursor:pointer" title="Ordenar">Frota <span id="sh-frota">↕</span></th>
-            <th onclick="sortHist('ocup')" style="cursor:pointer" title="Ordenar">Ocupação <span id="sh-ocup">↕</span></th>
+            <th onclick="sortHist('ocup')" style="cursor:pointer" title="Ordenar">Status Carregamento <span id="sh-ocup">↕</span></th>
             <th onclick="sortHist('prev_fech')" style="cursor:pointer;color:#00B200" title="Ordenar — itens com data aparecem primeiro">Prev. Fechamento <span id="sh-prev_fech">↑</span></th>
             <th>Obs.</th>
           <th onclick="sortHist('data_crit')" style="cursor:pointer" title="Ordenar">Data Crítica <span id="sh-data_crit">↕</span></th>
@@ -1901,9 +1896,17 @@ function calcPrioridade(r) {
 function ocupBar(v) {
   const color = ocupColorLegacy(v);
   const pct = Math.round(v * 100);
+  var label, labelColor;
+  if (pct >= 100) {
+    label = 'Finalizado'; labelColor = '#16a34a';
+  } else if (pct > 1) {
+    label = 'Carregando'; labelColor = '#ca8a04';
+  } else {
+    label = 'Vazio'; labelColor = '#9ca3af';
+  }
   return `<div class="ocup-cell">
     <div class="ocup-bar-bg"><div class="ocup-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-    <span class="ocup-label" style="color:${color}">${pct}%</span>
+    <span class="ocup-label" style="color:${labelColor};font-size:10px;font-weight:700;min-width:68px">${label}</span>
   </div>`;
 }
 function formatDT(s) {
@@ -2120,17 +2123,18 @@ function renderProg() {
     return `<tr id="${r._rowId}" style="${r.ocupPct >= 100 ? 'background:rgba(22,163,74,0.04)' : ''}">
       <td class="row-pos">${i+1}</td>
       <td>
-        <div style="display:flex;align-items:center;gap:6px">
-          <div class="ocup-bar-bg" style="min-width:50px;flex:1"><div class="ocup-bar-fill" id="bar_${r._rowId}" style="width:${barW}%;background:${ocupColor}"></div></div>
-          <div style="display:flex;align-items:center;gap:2px">
+        <div style="display:flex;align-items:center;gap:6px;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:4px;width:100%">
+            <div class="ocup-bar-bg" style="min-width:50px;flex:1"><div class="ocup-bar-fill" id="bar_${r._rowId}" style="width:${barW}%;background:${ocupColor}"></div></div>
             <input type="number" min="0" max="100" step="1"
               id="ocup_${r._rowId}"
               value="${r.ocupPct || ''}"
               placeholder="0"
-              style="width:48px;padding:3px 5px;font-size:12px;font-weight:600;color:${ocupColor};text-align:center;border-color:${r.ocupPct > 0 ? ocupColor+'66' : 'var(--border)'}"
+              style="width:44px;padding:3px 4px;font-size:11px;font-weight:600;color:${ocupColor};text-align:center;border-color:${r.ocupPct > 0 ? ocupColor+'66' : 'var(--border)'}"
               oninput="updateOcupBar('${r._rowId}')" onblur="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})">
-            <span style="font-size:11px;color:var(--text3)">%</span>
+            <span style="font-size:9px;color:var(--text3)">%</span>
           </div>
+          <span id="status_${r._rowId}" style="font-size:10px;font-weight:700;color:${r.ocupPct >= 100 ? '#16a34a' : r.ocupPct > 1 ? '#ca8a04' : '#9ca3af'}">${r.ocupPct >= 100 ? 'Finalizado' : r.ocupPct > 1 ? 'Carregando' : 'Vazio'}</span>
         </div>
       </td>
       <td>
@@ -2173,6 +2177,13 @@ function updateOcupBar(rowId) {
   bar.style.background = color;
   input.style.color = color;
   input.style.borderColor = pct > 0 ? color + '88' : 'var(--border)';
+  // Atualizar status label
+  const statusEl = document.getElementById('status_' + rowId);
+  if (statusEl) {
+    if (pct >= 100) { statusEl.textContent = 'Finalizado'; statusEl.style.color = '#16a34a'; }
+    else if (pct > 1) { statusEl.textContent = 'Carregando'; statusEl.style.color = '#ca8a04'; }
+    else { statusEl.textContent = 'Vazio'; statusEl.style.color = '#9ca3af'; }
+  }
 }
 
 
@@ -3255,7 +3266,6 @@ function buildEmailBody(programados) {
 
   let lines = [];
   lines.push('Programação de Veículos — GRU | ' + dia + ', ' + hoje);
-  lines.push('Emitido por: Patrick Mafud Ramos');
   lines.push('='.repeat(60));
   lines.push('');
   lines.push('RESUMO:');
@@ -4726,16 +4736,10 @@ function imprimirProgramados() {
   var diaHoje = getDiaHoje();
   data.sort(function(a, b) {
     var pa = a.prev_fech || '', pb = b.prev_fech || '';
-    if (pa && !pb) return -1;
-    if (!pa && pb) return 1;
+    if (pa && !pb) return -1; if (!pa && pb) return 1;
     if (pa && pb) {
-      function pd(s) {
-        var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-        if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]));
-        return null;
-      }
-      var da = pd(pa), db = pd(pb);
-      if (da && db && da - db !== 0) return da - db;
+      function pd(s) { var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/); if (m) return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1])); return null; }
+      var da = pd(pa), db = pd(pb); if (da && db && da - db !== 0) return da - db;
     }
     return (a.saida || '').localeCompare(b.saida || '');
   });
@@ -4755,6 +4759,7 @@ function imprimirProgramados() {
   var rows = data.map(function(r, i) {
     var pct = Math.round((r.ocup || 0) * 100);
     var barColor = pct >= 100 ? '#16a34a' : pct >= 71 ? '#65a30d' : pct >= 51 ? '#ca8a04' : pct >= 31 ? '#ea580c' : pct > 0 ? '#dc2626' : '#e5e7eb';
+    var statusLabel = pct >= 100 ? 'Finalizado' : pct > 1 ? 'Carregando' : 'Vazio';
     var tipoLabel = r.tipo === 'Carro da Malha' ? 'MALHA' : r.tipo === 'Carro Extra' ? 'EXTRA' : 'FORA';
     var tipoColor = r.tipo === 'Carro da Malha' ? '#15803d' : r.tipo === 'Carro Extra' ? '#ea580c' : '#dc2626';
     var tipoBg = r.tipo === 'Carro da Malha' ? 'rgba(0,178,0,.1)' : r.tipo === 'Carro Extra' ? 'rgba(234,88,12,.1)' : 'rgba(220,38,38,.1)';
@@ -4766,7 +4771,7 @@ function imprimirProgramados() {
       + '<td style="font-size:11px;color:#374151">' + (r.composicao || '-') + '</td>'
       + '<td style="color:#00B200;font-weight:700;font-family:monospace;text-align:center">' + (r.saida || '-') + '</td>'
       + '<td style="font-family:monospace;font-weight:600">' + (r.frota || '-') + '</td>'
-      + '<td><div style="display:flex;align-items:center;gap:5px"><div style="width:55px;height:9px;background:#e5e7eb;border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + barColor + '"></div></div><span style="font-weight:700;color:' + barColor + ';font-size:11px;min-width:28px">' + pct + '%</span></div></td>'
+      + '<td><div style="display:flex;align-items:center;gap:5px"><div style="width:55px;height:9px;background:#e5e7eb;border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + barColor + '"></div></div><span style="font-weight:700;color:' + barColor + ';font-size:11px;min-width:60px">' + statusLabel + '</span></div></td>'
       + '<td style="font-size:11px">' + (r.prev_fech || '-') + '</td>'
       + '<td style="color:#6b7280;font-style:italic;font-size:11px">' + (r.obs || '-') + '</td>'
       + '</tr>';
@@ -4803,7 +4808,7 @@ function imprimirProgramados() {
     + '</div><div style="text-align:right;font-size:12px">'
     + 'Data: <strong>' + hoje + ' (' + diaHoje + ')</strong><br>'
     + 'Emitido: ' + hoje + ' ' + printTime + '<br>'
-    + 'Patrick Mafud Ramos</div></div>'
+    + 'GRU — Tragetta Transportes</div></div>'
     + '<div class="stats">'
     + '<div class="stat"><div class="stat-l">Total hoje</div><div class="stat-v" style="color:#00B200">' + total + '</div></div>'
     + '<div class="stat"><div class="stat-l">100% Cheios</div><div class="stat-v" style="color:#15803d">' + cheios + '</div></div>'
@@ -4812,11 +4817,11 @@ function imprimirProgramados() {
     + '<table><thead><tr>'
     + '<th style="width:28px;text-align:center">#</th><th>Tipo</th><th>Destino</th><th>Regiao</th>'
     + '<th>Composicao</th><th style="text-align:center">Saida</th><th>Frota</th>'
-    + '<th>Ocupacao</th><th>Prev. Fech.</th><th>Obs.</th>'
+    + '<th>Status Carregamento</th><th>Prev. Fech.</th><th>Obs.</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table>'
     + '<div class="footer">'
     + '<span>Sistema de Programacao de Veiculos OPL - GRU - Tragetta Transportes</span>'
-    + '<span>Patrick Mafud Ramos - (11) 93322-6881</span>'
+    + '<span>GRU — Tragetta Transportes</span>'
     + '</div></body></html>';
 
   win.document.write(printHTML);
