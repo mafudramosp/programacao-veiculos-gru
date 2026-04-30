@@ -382,7 +382,99 @@
 
   .tab-content { display: none; }
   .tab-content.active { display: block; }
-  
+
+  /* Grade Destination Cards */
+  .destino-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 16px;
+    background: #ffffff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 90px;
+    max-width: 120px;
+  }
+  .destino-card:hover {
+    border-color: #00B200;
+    background: rgba(0,178,0,0.05);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  .destino-card.selected {
+    border-color: #00B200;
+    background: rgba(0,178,0,0.1);
+    box-shadow: 0 0 0 3px rgba(0,178,0,0.2);
+  }
+  .destino-card .card-destino {
+    font-size: 14px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 4px;
+  }
+  .destino-card .card-count {
+    font-size: 11px;
+    color: #6b7280;
+    background: #f3f4f6;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+  }
+  .destino-card.selected .card-count {
+    background: #00B200;
+    color: white;
+  }
+  .destino-card .card-qtd {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    color: #00B200;
+    margin-top: 4px;
+  }
+
+  /* Stat Cards (Programação tab) */
+  .stat-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 16px;
+    background: #ffffff;
+    border: 1.5px solid #e5e7eb;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 80px;
+    flex: 1;
+  }
+  .stat-card:hover {
+    border-color: #00B200;
+    background: rgba(0,178,0,0.05);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  .stat-card.selected {
+    border-color: #00B200;
+    background: rgba(0,178,0,0.1);
+    box-shadow: 0 0 0 3px rgba(0,178,0,0.2);
+  }
+  .stat-card .stat-label {
+    font-size: 11px;
+    color: #6b7280;
+    font-weight: 500;
+    text-align: center;
+    margin-bottom: 4px;
+  }
+  .stat-card .stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .stat-card .stat-value.blue { color: #2563eb; }
+  .stat-card .stat-value.green { color: #16a34a; }
+  .stat-card .stat-value.orange { color: #ea580c; }
+
   .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
   .dot-malha { background: var(--malha); }
   .dot-extra { background: var(--extra); }
@@ -1175,8 +1267,13 @@
       <option>Sábado</option>
       <option>Domingo</option>
     </select>
+    <button class="btn btn-ghost btn-sm" onclick="limparFiltroCardGrade()" style="font-size:11px" title="Limpar seleção de card">✕ Todos</button>
   </div>
-  <div class="main">
+
+  <!-- Cards de Destinos Clicáveis -->
+  <div class="main" style="padding-top:12px">
+    <div id="grade-destino-cards" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px"></div>
+    <div id="grade-selected-info" style="display:none;background:rgba(0,178,0,0.08);border:1px solid rgba(0,178,0,0.3);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#00B200;font-weight:600"></div>
     <div class="table-wrap">
       <table>
         <thead>
@@ -2073,6 +2170,18 @@ function buildProgRows() {
   });
 }
 
+// ===== STAT CARD FILTER FOR PROGRAMAÇÃO =====
+var _selectedStatFilter = null;
+
+function setStatFilter(filter) {
+  if (_selectedStatFilter === filter) {
+    _selectedStatFilter = null; // toggle off
+  } else {
+    _selectedStatFilter = filter;
+  }
+  renderProg();
+}
+
 function getFilteredProg() {
   const search = (document.getElementById('search-prog')?.value || '').toLowerCase();
   const tipo = document.getElementById('filter-tipo')?.value || '';
@@ -2084,6 +2193,12 @@ function getFilteredProg() {
     if (search) {
       const s = (r.destino + r.frota + r.regiao + r.composicao).toLowerCase();
       if (!s.includes(search)) return false;
+    }
+    // Apply stat card filter
+    if (_selectedStatFilter) {
+      if (_selectedStatFilter === 'preenchidos' && !(r.ocupPct > 0 || r.frota)) return false;
+      if (_selectedStatFilter === 'pendentes' && (r.ocupPct > 0 || r.frota)) return false;
+      if (_selectedStatFilter === 'cheios' && r.ocupPct < 100) return false;
     }
     return true;
   });
@@ -2097,16 +2212,26 @@ function renderProg() {
   const diasAbrev = {'Segunda-feira':'Seg','Terça-feira':'Ter','Quarta-feira':'Qua','Quinta-feira':'Qui','Sexta-feira':'Sex','Sábado':'Sáb','Domingo':'Dom'};
   if (labelEl) labelEl.textContent = (diasAbrev[diaHoje] || diaHoje) + ' · ' + dataHoje;
 
+  // Calculate stats from ALL data (not filtered)
+  const allRows = buildProgRows();
+  const total = allRows.length;
+  const preenchidos = allRows.filter(r => r.ocupPct > 0 || r.frota).length;
+  const cheios = allRows.filter(r => r.ocupPct >= 100).length;
+  const pendentes = total - preenchidos;
+
+  // Apply filters for table
   const data = getFilteredProg();
-  const total = data.length;
-  const preenchidos = data.filter(r => r.ocupPct > 0 || r.frota).length;
-  const cheios = data.filter(r => r.ocupPct >= 100).length;
+
+  const isRotasSel = _selectedStatFilter === null;
+  const isPreenchSel = _selectedStatFilter === 'preenchidos';
+  const isPendSel = _selectedStatFilter === 'pendentes';
+  const isCheiosSel = _selectedStatFilter === 'cheios';
 
   document.getElementById('stats-prog').innerHTML = `
-    <div class="stat-card"><span class="stat-label">Rotas Hoje</span><span class="stat-value blue">${total}</span></div>
-    <div class="stat-card"><span class="stat-label">Preenchidos</span><span class="stat-value" style="color:var(--green)">${preenchidos}</span></div>
-    <div class="stat-card"><span class="stat-label">Pendentes</span><span class="stat-value orange">${total - preenchidos}</span></div>
-    <div class="stat-card"><span class="stat-label">100% Cheios</span><span class="stat-value green">${cheios}</span></div>
+    <div class="stat-card ${isRotasSel ? 'selected' : ''}" onclick="setStatFilter(null)"><span class="stat-label">Rotas Hoje</span><span class="stat-value blue">${total}</span></div>
+    <div class="stat-card ${isPreenchSel ? 'selected' : ''}" onclick="setStatFilter('preenchidos')"><span class="stat-label">Preenchidos</span><span class="stat-value" style="color:var(--green)">${preenchidos}</span></div>
+    <div class="stat-card ${isPendSel ? 'selected' : ''}" onclick="setStatFilter('pendentes')"><span class="stat-label">Pendentes</span><span class="stat-value orange">${pendentes}</span></div>
+    <div class="stat-card ${isCheiosSel ? 'selected' : ''}" onclick="setStatFilter('cheios')"><span class="stat-label">100% Cheios</span><span class="stat-value green">${cheios}</span></div>
   `;
   setTimeout(applyDTInputs, 100);
   document.getElementById('badge-prog').textContent = total;
@@ -2299,6 +2424,8 @@ function salvarTodos() {
 function sortTable(key) { renderProg(); }
 
 // ===== RENDER GRADE =====
+var _selectedDestino = null;
+
 function renderGrade() {
   const search = (document.getElementById('search-grade')?.value || '').toLowerCase();
   const regiao = document.getElementById('filter-grade-regiao')?.value || '';
@@ -2312,9 +2439,51 @@ function renderGrade() {
     }
     return true;
   });
-  document.getElementById('badge-grade').textContent = gradeData.length;
+
+  // Render Destination Cards
+  const cardsContainer = document.getElementById('grade-destino-cards');
+  const uniqueDestinos = [...new Set(data.map(r => r.destino))].sort();
+
+  // Count programações por destino (usando progData)
+  const destinosComQtd = uniqueDestinos.map(dest => {
+    const destinosData = data.filter(r => r.destino === dest);
+    const qtdProgramadas = progData.filter(p => p.destino === dest).length;
+    return { destino: dest, qtd: destinosData.length, programados: qtdProgramadas };
+  });
+
+  cardsContainer.innerHTML = destinosComQtd.map(d => `
+    <div class="destino-card ${_selectedDestino === d.destino ? 'selected' : ''}"
+         onclick="selectDestinoCard('${d.destino}')">
+      <div class="card-destino">${d.destino}</div>
+      <div class="card-count">${d.programados > 0 ? d.programados + ' prog.' : d.qtd + ' rotas'}</div>
+      <div class="card-qtd">${d.qtd}</div>
+    </div>
+  `).join('');
+
+  // Update info panel
+  const infoPanel = document.getElementById('grade-selected-info');
+  if (_selectedDestino) {
+    const selectedData = data.filter(r => r.destino === _selectedDestino);
+    const programados = progData.filter(p => p.destino === _selectedDestino);
+    infoPanel.style.display = 'block';
+    infoPanel.innerHTML = `📍 <strong>${_selectedDestino}</strong> — ${selectedData.length} rotas · ${programados.length} programações`;
+  } else {
+    infoPanel.style.display = 'none';
+  }
+
+  // Filter table by selected destino
+  let filteredData = data;
+  if (_selectedDestino) {
+    filteredData = data.filter(r => r.destino === _selectedDestino);
+  }
+
+  document.getElementById('badge-grade').textContent = data.length;
   const tbody = document.getElementById('tbody-grade');
-  tbody.innerHTML = data.map((r, i) => `<tr>
+  if (!filteredData.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📭</div><div class="empty-title">Nenhuma rota encontrada</div></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = filteredData.map((r, i) => `<tr>
     <td class="row-pos">${i+1}</td>
     <td class="mono">${r.origem}</td>
     <td style="font-weight:600">${r.destino}</td>
@@ -2324,6 +2493,20 @@ function renderGrade() {
     <td style="color:var(--text2)">${r.dia}</td>
     <td><button class="btn btn-ghost btn-sm" onclick="useGrade(${gradeData.indexOf(r)})">↗ Usar</button></td>
   </tr>`).join('');
+}
+
+function selectDestinoCard(destino) {
+  if (_selectedDestino === destino) {
+    _selectedDestino = null; // Deselect if already selected
+  } else {
+    _selectedDestino = destino;
+  }
+  renderGrade();
+}
+
+function limparFiltroCardGrade() {
+  _selectedDestino = null;
+  renderGrade();
 }
 
 // ===== RENDER HISTÓRICO =====
@@ -4862,208 +5045,9 @@ window.addEventListener('appinstalled', function() {
 
 
 // ============================================================
-// CHAT WHATSAPP-STYLE — usando Apps Script + Sheets "Chat" aba
-// ============================================================
-var _chatUser = localStorage.getItem('pvg_chat_user') || '';
-var _chatLastId = parseInt(localStorage.getItem('pvg_chat_last_id') || '0', 10);
-var _chatMsgs = [];
-
-function initChat() {
-  if (_chatUser) {
-    document.getElementById('chat-login').style.display = 'none';
-    document.getElementById('chat-room').style.display = 'flex';
-    document.getElementById('chat-meu-nome').textContent = _chatUser;
-  } else {
-    document.getElementById('chat-login').style.display = 'block';
-    document.getElementById('chat-room').style.display = 'none';
-    setTimeout(function() { document.getElementById('chat-nome-input').focus(); }, 200);
-  }
-}
-
-function entrarChat() {
-  var nome = (document.getElementById('chat-nome-input').value || '').trim();
-  if (!nome) { showToast('Digite seu nome', 'error'); return; }
-  if (nome.length > 20) { showToast('Nome muito longo (max 20)', 'error'); return; }
-  _chatUser = nome;
-  localStorage.setItem('pvg_chat_user', nome);
-  initChat();
-  // Poll immediately to load history
-  pollChat();
-}
-
-function sairChat() {
-  if (!confirm('Deseja sair do chat?')) return;
-  localStorage.removeItem('pvg_chat_user');
-  _chatUser = '';
-  _chatMsgs = [];
-  document.getElementById('chat-msgs').innerHTML = '';
-  initChat();
-}
-
-function enviarChatMsg() {
-  var input = document.getElementById('chat-input');
-  var msg = (input.value || '').trim();
-  if (!msg || !_chatUser) return;
-  input.value = '';
-
-  // Send via JSONP GET (reliable)
-  var cbName = 'chatSend_' + Date.now();
-  var tm = setTimeout(function() { delete window[cbName]; }, 10000);
-  window[cbName] = function(r) { clearTimeout(tm); delete window[cbName]; pollChat(); };
-
-  var url = APPS_SCRIPT_URL +
-    '?action=salvarAlerta' +
-    '&de=chat:' + encodeURIComponent(_chatUser) +
-    '&msg=' + encodeURIComponent(msg) +
-    '&callback=' + cbName +
-    '&t=' + Date.now();
-  var s = document.createElement('script');
-  s.src = url;
-  s.onerror = function() { clearTimeout(tm); delete window[cbName]; showToast('⚠️ Erro ao enviar', 'error'); };
-  document.head.appendChild(s);
-
-  // Add optimistically to UI
-  addChatMsg({ id: Date.now(), de: 'chat:' + _chatUser, msg: msg, ts: new Date().toLocaleString('pt-BR') }, true);
-}
-
-function addChatMsg(m, localEcho) {
-  var container = document.getElementById('chat-msgs');
-  if (!container) return;
-
-  var autor = (m.de || '').replace(/^chat:/, '');
-  var isMe = autor === _chatUser;
-  var safeMsg = String(m.msg || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  var time = (m.ts || '').split(' ')[1] || '';
-
-  var bubble = document.createElement('div');
-  bubble.style.cssText = 'max-width:75%;padding:8px 12px;border-radius:8px;font-family:Poppins,sans-serif;word-wrap:break-word;' +
-    (isMe
-      ? 'align-self:flex-end;background:#dcf8c6;border-bottom-right-radius:2px'
-      : 'align-self:flex-start;background:#fff;border-bottom-left-radius:2px;box-shadow:0 1px 2px rgba(0,0,0,.1)');
-
-  bubble.innerHTML =
-    (isMe ? '' : '<div style="font-size:11px;font-weight:700;color:#075E54;margin-bottom:2px">' + autor + '</div>') +
-    '<div style="font-size:14px;color:#111;line-height:1.4">' + safeMsg + '</div>' +
-    '<div style="font-size:10px;color:#667;text-align:right;margin-top:2px">' + time + '</div>';
-
-  container.appendChild(bubble);
-  container.scrollTop = container.scrollHeight;
-
-  if (!localEcho && !isMe) {
-    // New message from someone else — play sound
-    tocarMensagem();
-    // Badge on nav
-    var isOnChatTab = document.getElementById('tab-chat-content').classList.contains('active');
-    if (!isOnChatTab) {
-      var badge = document.getElementById('badge-chat');
-      if (badge) {
-        badge.style.display = 'inline-block';
-        var cur = parseInt(badge.textContent || '0', 10);
-        badge.textContent = String(cur + 1);
-      }
-    }
-  }
-}
-
-function pollChat() {
-  if (!APPS_SCRIPT_URL) return;
-  var cbName = 'chatPoll_' + Date.now();
-  var tm = setTimeout(function() { delete window[cbName]; }, 10000);
-  window[cbName] = function(json) {
-    clearTimeout(tm); delete window[cbName];
-    if (!json || json.status !== 'ok' || !json.alertas) return;
-
-    var chatMsgs = json.alertas.filter(function(a) {
-      return String(a.de || '').indexOf('chat:') === 0;
-    });
-    // Sort ascending by id
-    chatMsgs.sort(function(a, b) {
-      var ai = parseInt(String(a.id).split('.')[0], 10) || 0;
-      var bi = parseInt(String(b.id).split('.')[0], 10) || 0;
-      return ai - bi;
-    });
-
-    // First load: show last 20 and set baseline
-    if (_chatLastId === 0 && chatMsgs.length) {
-      var recent = chatMsgs.slice(-20);
-      document.getElementById('chat-msgs').innerHTML = '';
-      recent.forEach(function(m) { addChatMsg(m, true); });
-      var last = chatMsgs[chatMsgs.length - 1];
-      _chatLastId = parseInt(String(last.id).split('.')[0], 10) || 0;
-      localStorage.setItem('pvg_chat_last_id', String(_chatLastId));
-      return;
-    }
-
-    // Show only new messages
-    var novos = chatMsgs.filter(function(m) {
-      var mid = parseInt(String(m.id).split('.')[0], 10) || 0;
-      return mid > _chatLastId;
-    });
-
-    novos.forEach(function(m) {
-      var mid = parseInt(String(m.id).split('.')[0], 10) || 0;
-      var autor = (m.de || '').replace(/^chat:/, '');
-      // Skip our own echo (already added locally)
-      if (autor !== _chatUser) {
-        addChatMsg(m, false);
-      }
-      if (mid > _chatLastId) _chatLastId = mid;
-    });
-    localStorage.setItem('pvg_chat_last_id', String(_chatLastId));
-  };
-
-  var s = document.createElement('script');
-  s.src = APPS_SCRIPT_URL + '?action=alertas&callback=' + cbName + '&t=' + Date.now();
-  s.onerror = function() { clearTimeout(tm); delete window[cbName]; };
-  document.head.appendChild(s);
-}
-
-// Poll chat every 4s
-if (APPS_SCRIPT_URL) {
-  setInterval(pollChat, 4000);
-}
-
-// Clear badge when entering chat tab
-(function() {
-  var origShowTab = window.showTab;
-  if (origShowTab && !window._chatHooked) {
-    window._chatHooked = true;
-    window.showTab = function(tab) {
-      origShowTab(tab);
-      if (tab === 'chat') {
-        initChat();
-        var badge = document.getElementById('badge-chat');
-        if (badge) { badge.style.display = 'none'; if (badge) badge.textContent = '0'; }
-        if (_chatUser) pollChat();
-      }
-    };
-  }
-})();
-
 
 
 // ============================================================
-// WHATSAPP FLOATING BUTTON
-// ============================================================
-function abrirWAModal() {
-  var modal = document.getElementById('wa-modal');
-  if (modal) modal.style.display = 'flex';
-}
-function fecharWAModal() {
-  var modal = document.getElementById('wa-modal');
-  if (modal) modal.style.display = 'none';
-}
-function abrirWA(numero, nome) {
-  var msg = encodeURIComponent('Ola ' + nome + ', preciso de informacoes sobre a Programacao de Veiculos OPL GRU.');
-  window.open('https:/' + '/wa.me/' + numero + '?text=' + msg, '_blank');
-  fecharWAModal();
-}
-document.addEventListener('click', function(e) {
-  var modal = document.getElementById('wa-modal');
-  if (modal && e.target === modal) fecharWAModal();
-});
-
-
 function autoFormatDT(input, isDatetime) {
   var raw = input.value.replace(/[^0-9]/g, '');
   var max = isDatetime ? 12 : 8;
@@ -5123,116 +5107,5 @@ function filtroSemana() {
 
 </script>
 <!-- ============================================================ -->
-<!-- WHATSAPP FLOATING BUTTON + SHIFT SELECTOR MODAL              -->
-<!-- ============================================================ -->
-<button id="wa-fab" onclick="abrirWAModal()" title="Contato via WhatsApp"
-  style="
-    position:fixed;bottom:28px;right:24px;z-index:8000;
-    width:58px;height:58px;border-radius:50%;border:none;
-    background:#25D366;color:#fff;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;
-    box-shadow:0 4px 16px rgba(37,211,102,.5);
-    transition:transform .2s,box-shadow .2s;
-  "
-  onmouseover="this.style.transform='scale(1.1)';this.style.boxShadow='0 6px 24px rgba(37,211,102,.7)'"
-  onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 16px rgba(37,211,102,.5)'"
->
-  <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-  </svg>
-</button>
-
-<!-- SHIFT SELECTOR MODAL -->
-<div id="wa-modal" style="
-  display:none;position:fixed;inset:0;z-index:8001;
-  background:rgba(0,0,0,.65);backdrop-filter:blur(6px);
-  align-items:center;justify-content:center;
-  font-family:'Poppins',sans-serif;
-">
-  <div style="
-    background:#fff;border-radius:20px;padding:28px 24px;
-    width:100%;max-width:380px;margin:16px;
-    box-shadow:0 24px 64px rgba(0,0,0,.3);
-    animation:waModalIn .3s cubic-bezier(.34,1.56,.64,1);
-  ">
-    <style>@keyframes waModalIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}</style>
-
-    <!-- Header -->
-    <div style="text-align:center;margin-bottom:20px">
-      <div style="width:56px;height:56px;background:#25D366;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px">
-        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="white">
-          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-        </svg>
-      </div>
-      <div style="font-size:17px;font-weight:700;color:#111">Contato via WhatsApp</div>
-      <div style="font-size:12px;color:#6b7280;margin-top:4px">Selecione o turno para falar com o responsável</div>
-    </div>
-
-    <!-- Shift buttons -->
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
-
-      <!-- 1º Turno -->
-      <div style="border:1.5px solid #e5e7eb;border-radius:12px;overflow:hidden">
-        <div style="background:#f9fafb;padding:10px 14px;font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #e5e7eb">
-          ☀️ 1º Turno
-        </div>
-        <div style="display:flex;gap:8px;padding:10px">
-          <button onclick="abrirWA('5511951500192','Adilson')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
-            📞 Adilson
-          </button>
-          <button onclick="abrirWA('5511973449341','Denis Lopes')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
-            📞 Denis Lopes
-          </button>
-          <button onclick="abrirWA('5511946755969','Wellington')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
-            📞 Wellington
-          </button>
-        </div>
-      </div>
-
-      <!-- 2º Turno -->
-      <div style="border:1.5px solid #e5e7eb;border-radius:12px;overflow:hidden">
-        <div style="background:#f9fafb;padding:10px 14px;font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #e5e7eb">
-          🌙 2º Turno
-        </div>
-        <div style="display:flex;gap:8px;padding:10px">
-          <button onclick="abrirWA('5511979538547','Julio Matos')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
-            📞 Julio Matos
-          </button>
-          <button onclick="abrirWA('5511973057501','Elenaldo Santana')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
-            📞 Elenaldo
-          </button>
-          <button onclick="abrirWA('5511972400780','Edmilson Neves')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
-            📞 Edmilson Neves
-          </button>
-        </div>
-      </div>
-
-      <!-- 3º Turno -->
-      <div style="border:1.5px solid #e5e7eb;border-radius:12px;overflow:hidden">
-        <div style="background:#f9fafb;padding:10px 14px;font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #e5e7eb">
-          🌃 3º Turno
-        </div>
-        <div style="display:flex;gap:8px;padding:10px">
-          <button onclick="abrirWA('5511951350073','Walisson Silva')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
-            📞 Walisson Silva
-          </button>
-          <button onclick="abrirWA('5511981295248','Rogerio Moimo')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
-            📞 Rogerio Moimo
-          </button>
-          <button onclick="abrirWA('5511954309243','Jayme Cabral')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
-            📞 Jayme Cabral
-          </button>
-        </div>
-      </div>
-
-    </div>
-
-    <button onclick="fecharWAModal()" style="width:100%;padding:12px;background:#f3f4f6;color:#374151;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif">
-      Cancelar
-    </button>
-  </div>
-</div>
-
-
 </body>
 </html>
