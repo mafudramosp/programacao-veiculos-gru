@@ -355,6 +355,24 @@
     gap: 2px;
     min-width: 120px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    transition: all 0.15s;
+  }
+  .stat-card.clickable {
+    cursor: pointer;
+  }
+  .stat-card.clickable:hover {
+    border-color: #00B200;
+    box-shadow: 0 2px 8px rgba(0,178,0,0.15);
+    transform: translateY(-1px);
+  }
+  .stat-card.clickable.active-filter {
+    border-color: #00B200;
+    background: rgba(0,178,0,0.05);
+    box-shadow: 0 2px 8px rgba(0,178,0,0.2);
+  }
+  .stat-card.clickable.active-filter .stat-label::after {
+    content: ' ●';
+    color: #00B200;
   }
   .stat-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
   .stat-value { font-size: 20px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; }
@@ -549,6 +567,7 @@
     .header-sub { font-size: 10px; }
     .header-divider { display: none; }
     .header-clock { font-size: 11px; margin-left: 0; order: 10; width: 100%; }
+    .header-credit { display: none; }
 
     .nav { overflow-x: auto; padding: 0 10px; gap: 0; flex-wrap: nowrap; }
     .nav-btn { padding: 8px 12px; font-size: 11px; flex-shrink: 0; }
@@ -947,7 +966,11 @@
       font-family:'Poppins',sans-serif;line-height:1;
     ">0</span>
   </button>
-
+  <div class="header-credit" style="text-align:right;line-height:1.5">
+    <div style="font-size:11px;font-weight:600;color:#d1d5db"></div>
+    <div style="font-size:10px;color:var(--text3)"></div>
+    <div style="font-size:9px;color:#6b7280;font-style:italic"></div>
+  </div>
 </div>
 
 <div class="nav">
@@ -1021,7 +1044,7 @@
         <thead>
           <tr>
             <th style="width:36px">#</th>
-            <th style="width:130px">Status Carregamento</th>
+            <th style="width:130px">Ocupação %</th>
             <th style="width:130px">Tipo</th>
             <th style="width:70px">Destino</th>
             <th style="width:100px">Região</th>
@@ -1247,7 +1270,7 @@
             <th onclick="sortHist('saida')" style="cursor:pointer" title="Ordenar">Saída <span id="sh-saida">↕</span></th>
             <th>Dia</th>
             <th onclick="sortHist('frota')" style="cursor:pointer" title="Ordenar">Frota <span id="sh-frota">↕</span></th>
-            <th onclick="sortHist('ocup')" style="cursor:pointer" title="Ordenar">Status Carregamento <span id="sh-ocup">↕</span></th>
+            <th onclick="sortHist('ocup')" style="cursor:pointer" title="Ordenar">Ocupação <span id="sh-ocup">↕</span></th>
             <th onclick="sortHist('prev_fech')" style="cursor:pointer;color:#00B200" title="Ordenar — itens com data aparecem primeiro">Prev. Fechamento <span id="sh-prev_fech">↑</span></th>
             <th>Obs.</th>
           <th onclick="sortHist('data_crit')" style="cursor:pointer" title="Ordenar">Data Crítica <span id="sh-data_crit">↕</span></th>
@@ -1624,6 +1647,7 @@ let progData = [];
 let histData = []; // legacy - Programados tab now uses progData
 let sortKey = 'ocup';
 let sortDir = -1;
+let _filtroCard = null; // 'pendentes' | 'preenchidos' | 'cheios' | null
 let nextId = 3646;
 
 // ===== LOCAL STORAGE =====
@@ -1896,17 +1920,9 @@ function calcPrioridade(r) {
 function ocupBar(v) {
   const color = ocupColorLegacy(v);
   const pct = Math.round(v * 100);
-  var label, labelColor;
-  if (pct >= 100) {
-    label = 'Finalizado'; labelColor = '#16a34a';
-  } else if (pct > 1) {
-    label = 'Carregando'; labelColor = '#ca8a04';
-  } else {
-    label = 'Vazio'; labelColor = '#9ca3af';
-  }
   return `<div class="ocup-cell">
     <div class="ocup-bar-bg"><div class="ocup-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-    <span class="ocup-label" style="color:${labelColor};font-size:10px;font-weight:700;min-width:68px">${label}</span>
+    <span class="ocup-label" style="color:${color}">${pct}%</span>
   </div>`;
 }
 function formatDT(s) {
@@ -2073,6 +2089,15 @@ function buildProgRows() {
   });
 }
 
+function filtrarPorCard(tipo) {
+  // Toggle: clicar no mesmo card ativo limpa o filtro
+  _filtroCard = (_filtroCard === tipo || tipo === 'todos') && tipo !== 'todos' ? null : tipo === 'todos' ? null : tipo;
+  renderProg();
+  // Scroll suave até a tabela
+  const tbl = document.getElementById('table-prog');
+  if (tbl) tbl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function getFilteredProg() {
   const search = (document.getElementById('search-prog')?.value || '').toLowerCase();
   const tipo = document.getElementById('filter-tipo')?.value || '';
@@ -2085,6 +2110,10 @@ function getFilteredProg() {
       const s = (r.destino + r.frota + r.regiao + r.composicao).toLowerCase();
       if (!s.includes(search)) return false;
     }
+    // Filtro por card clicado
+    if (_filtroCard === 'pendentes') return !r.frota && !r.ocupPct;
+    if (_filtroCard === 'preenchidos') return !!(r.frota || r.ocupPct);
+    if (_filtroCard === 'cheios') return r.ocupPct >= 100;
     return true;
   });
 }
@@ -2102,11 +2131,24 @@ function renderProg() {
   const preenchidos = data.filter(r => r.ocupPct > 0 || r.frota).length;
   const cheios = data.filter(r => r.ocupPct >= 100).length;
 
+  const _fCard = _filtroCard;
   document.getElementById('stats-prog').innerHTML = `
-    <div class="stat-card"><span class="stat-label">Rotas Hoje</span><span class="stat-value blue">${total}</span></div>
-    <div class="stat-card"><span class="stat-label">Preenchidos</span><span class="stat-value" style="color:var(--green)">${preenchidos}</span></div>
-    <div class="stat-card"><span class="stat-label">Pendentes</span><span class="stat-value orange">${total - preenchidos}</span></div>
-    <div class="stat-card"><span class="stat-label">100% Cheios</span><span class="stat-value green">${cheios}</span></div>
+    <div class="stat-card clickable ${_fCard === 'todos' ? 'active-filter' : ''}" onclick="filtrarPorCard('todos')" title="Ver todas as rotas">
+      <span class="stat-label">Rotas Hoje</span>
+      <span class="stat-value blue">${total}</span>
+    </div>
+    <div class="stat-card clickable ${_fCard === 'preenchidos' ? 'active-filter' : ''}" onclick="filtrarPorCard('preenchidos')" title="Ver somente preenchidos">
+      <span class="stat-label">Preenchidos</span>
+      <span class="stat-value" style="color:var(--green)">${preenchidos}</span>
+    </div>
+    <div class="stat-card clickable ${_fCard === 'pendentes' ? 'active-filter' : ''}" onclick="filtrarPorCard('pendentes')" title="Ver somente pendentes">
+      <span class="stat-label">Pendentes</span>
+      <span class="stat-value orange">${total - preenchidos}</span>
+    </div>
+    <div class="stat-card clickable ${_fCard === 'cheios' ? 'active-filter' : ''}" onclick="filtrarPorCard('cheios')" title="Ver somente 100% cheios">
+      <span class="stat-label">100% Cheios</span>
+      <span class="stat-value green">${cheios}</span>
+    </div>
   `;
   setTimeout(applyDTInputs, 100);
   document.getElementById('badge-prog').textContent = total;
@@ -2123,18 +2165,17 @@ function renderProg() {
     return `<tr id="${r._rowId}" style="${r.ocupPct >= 100 ? 'background:rgba(22,163,74,0.04)' : ''}">
       <td class="row-pos">${i+1}</td>
       <td>
-        <div style="display:flex;align-items:center;gap:6px;flex-direction:column">
-          <div style="display:flex;align-items:center;gap:4px;width:100%">
-            <div class="ocup-bar-bg" style="min-width:50px;flex:1"><div class="ocup-bar-fill" id="bar_${r._rowId}" style="width:${barW}%;background:${ocupColor}"></div></div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="ocup-bar-bg" style="min-width:50px;flex:1"><div class="ocup-bar-fill" id="bar_${r._rowId}" style="width:${barW}%;background:${ocupColor}"></div></div>
+          <div style="display:flex;align-items:center;gap:2px">
             <input type="number" min="0" max="100" step="1"
               id="ocup_${r._rowId}"
               value="${r.ocupPct || ''}"
               placeholder="0"
-              style="width:44px;padding:3px 4px;font-size:11px;font-weight:600;color:${ocupColor};text-align:center;border-color:${r.ocupPct > 0 ? ocupColor+'66' : 'var(--border)'}"
+              style="width:48px;padding:3px 5px;font-size:12px;font-weight:600;color:${ocupColor};text-align:center;border-color:${r.ocupPct > 0 ? ocupColor+'66' : 'var(--border)'}"
               oninput="updateOcupBar('${r._rowId}')" onblur="autoSalvarLinha('${r._rowId}','${r.destino}','${r.saida}','${r.dia}',${r._id !== null ? r._id : 'null'})">
-            <span style="font-size:9px;color:var(--text3)">%</span>
+            <span style="font-size:11px;color:var(--text3)">%</span>
           </div>
-          <span id="status_${r._rowId}" style="font-size:10px;font-weight:700;color:${r.ocupPct >= 100 ? '#16a34a' : r.ocupPct > 1 ? '#ca8a04' : '#9ca3af'}">${r.ocupPct >= 100 ? 'Finalizado' : r.ocupPct > 1 ? 'Carregando' : 'Vazio'}</span>
         </div>
       </td>
       <td>
@@ -2177,13 +2218,6 @@ function updateOcupBar(rowId) {
   bar.style.background = color;
   input.style.color = color;
   input.style.borderColor = pct > 0 ? color + '88' : 'var(--border)';
-  // Atualizar status label
-  const statusEl = document.getElementById('status_' + rowId);
-  if (statusEl) {
-    if (pct >= 100) { statusEl.textContent = 'Finalizado'; statusEl.style.color = '#16a34a'; }
-    else if (pct > 1) { statusEl.textContent = 'Carregando'; statusEl.style.color = '#ca8a04'; }
-    else { statusEl.textContent = 'Vazio'; statusEl.style.color = '#9ca3af'; }
-  }
 }
 
 
@@ -2839,12 +2873,12 @@ function closeEditModal(e) {
 
 // ===== CLEAR FILTERS =====
 function clearFilters() {
-  // Clear only the search/filter fields
   var ids = ['search-prog', 'filter-tipo', 'filter-regiao', 'filter-dia'];
   ids.forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.value = '';
   });
+  _filtroCard = null;
   renderProg();
 }
 
@@ -3266,6 +3300,7 @@ function buildEmailBody(programados) {
 
   let lines = [];
   lines.push('Programação de Veículos — GRU | ' + dia + ', ' + hoje);
+  lines.push('Emitido por: GRU — Tragetta Transportes');
   lines.push('='.repeat(60));
   lines.push('');
   lines.push('RESUMO:');
@@ -4732,16 +4767,12 @@ function imprimirProgramados() {
     return true;
   });
 
-  var hoje = getDataHoje();
-  var diaHoje = getDiaHoje();
+  var hoje = getDataHoje(); var diaHoje = getDiaHoje();
   data.sort(function(a, b) {
-    var pa = a.prev_fech || '', pb = b.prev_fech || '';
-    if (pa && !pb) return -1; if (!pa && pb) return 1;
-    if (pa && pb) {
-      function pd(s) { var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/); if (m) return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1])); return null; }
-      var da = pd(pa), db = pd(pb); if (da && db && da - db !== 0) return da - db;
-    }
-    return (a.saida || '').localeCompare(b.saida || '');
+    var pa = a.prev_fech||'', pb = b.prev_fech||'';
+    if (pa&&!pb) return -1; if (!pa&&pb) return 1;
+    if (pa&&pb) { function pd(s){var m=String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);return m?new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1])):null;} var da=pd(pa),db=pd(pb); if(da&&db&&da-db!==0)return da-db; }
+    return (a.saida||'').localeCompare(b.saida||'');
   });
 
   if (!data.length) {
@@ -4821,7 +4852,7 @@ function imprimirProgramados() {
     + '</tr></thead><tbody>' + rows + '</tbody></table>'
     + '<div class="footer">'
     + '<span>Sistema de Programacao de Veiculos OPL - GRU - Tragetta Transportes</span>'
-    + '<span>GRU — Tragetta Transportes</span>'
+    + '<span>GRU — Tragetta Transportes - (11) 93322-6881</span>'
     + '</div></body></html>';
 
   win.document.write(printHTML);
