@@ -1893,7 +1893,6 @@ function calcPrioridade(r) {
   var parts = (r.saida || '00:00').split(':');
   var departure = new Date();
   departure.setHours(parseInt(parts[0]) || 0, parseInt(parts[1]) || 0, 0, 0);
-  // Se já passou hoje → Vencida
   if (departure < now) return 'Vencida';
   var diffH = (departure - now) / 3600000;
   if (diffH < 7) return 'Alta';
@@ -4706,7 +4705,22 @@ function imprimirProgramados() {
     return true;
   });
 
-  data.sort(function(a, b) { return (a.saida || '').localeCompare(b.saida || ''); });
+  // Mesma ordenação da aba Programados: prev_fech primeiro, depois saida
+  data.sort(function(a, b) {
+    var pa = a.prev_fech || '', pb = b.prev_fech || '';
+    if (pa && !pb) return -1;
+    if (!pa && pb) return 1;
+    if (pa && pb) {
+      function pd(s) {
+        var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (m) return new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]));
+        return null;
+      }
+      var da = pd(pa), db = pd(pb);
+      if (da && db && da - db !== 0) return da - db;
+    }
+    return (a.saida || '').localeCompare(b.saida || '');
+  });
 
   if (!data.length) {
     var msg = 'Nenhum registro encontrado';
@@ -4727,18 +4741,16 @@ function imprimirProgramados() {
     var tipoColor = r.tipo === 'Carro da Malha' ? '#15803d' : r.tipo === 'Carro Extra' ? '#ea580c' : '#dc2626';
     var tipoBg = r.tipo === 'Carro da Malha' ? 'rgba(0,178,0,.1)' : r.tipo === 'Carro Extra' ? 'rgba(234,88,12,.1)' : 'rgba(220,38,38,.1)';
     return '<tr>'
-      + '<td>' + (i+1) + '</td>'
-      + '<td>' + (r.gerado || '-') + '</td>'
+      + '<td style="text-align:center;color:#9ca3af;font-size:10px">' + (i+1) + '</td>'
       + '<td><span style="background:' + tipoBg + ';color:' + tipoColor + ';padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700">' + tipoLabel + '</span></td>'
-      + '<td style="font-weight:700">' + r.destino + '</td>'
+      + '<td style="font-weight:800;font-size:14px">' + r.destino + '</td>'
       + '<td>' + (r.regiao || '-') + '</td>'
-      + '<td style="font-size:11px">' + (r.composicao || '-') + '</td>'
-      + '<td style="color:#00B200;font-weight:700;font-family:monospace">' + (r.saida || '-') + '</td>'
-      + '<td>' + (r.dia || '-') + '</td>'
-      + '<td style="font-family:monospace">' + (r.frota || '-') + '</td>'
-      + '<td><div style="display:flex;align-items:center;gap:4px"><div style="width:50px;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + barColor + '"></div></div><span style="font-weight:700;color:' + barColor + ';font-size:11px">' + pct + '%</span></div></td>'
-      + '<td>' + (r.prev_fech || '-') + '</td>'
-      + '<td style="color:#6b7280;font-style:italic">' + (r.obs || '-') + '</td>'
+      + '<td style="font-size:11px;color:#374151">' + (r.composicao || '-') + '</td>'
+      + '<td style="color:#00B200;font-weight:700;font-family:monospace;text-align:center">' + (r.saida || '-') + '</td>'
+      + '<td style="font-family:monospace;font-weight:600">' + (r.frota || '-') + '</td>'
+      + '<td><div style="display:flex;align-items:center;gap:5px"><div style="width:55px;height:9px;background:#e5e7eb;border-radius:4px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + barColor + '"></div></div><span style="font-weight:700;color:' + barColor + ';font-size:11px;min-width:28px">' + pct + '%</span></div></td>'
+      + '<td style="font-size:11px">' + (r.prev_fech || '-') + '</td>'
+      + '<td style="color:#6b7280;font-style:italic;font-size:11px">' + (r.obs || '-') + '</td>'
       + '</tr>';
   }).join('');
 
@@ -4782,9 +4794,9 @@ function imprimirProgramados() {
     + '<div class="stat"><div class="stat-l">Pendentes</div><div class="stat-v" style="color:#ea580c">' + (total-cheios) + '</div></div>'
     + '</div>'
     + '<table><thead><tr>'
-    + '<th>#</th><th>Gerado em</th><th>Tipo</th><th>Destino</th><th>Regiao</th>'
-    + '<th>Composicao</th><th>Saida</th><th>Dia</th><th>Frota</th><th>Ocupacao</th>'
-    + '<th>Prev. Fech.</th><th>Obs.</th>'
+    + '<th style="width:28px;text-align:center">#</th><th>Tipo</th><th>Destino</th><th>Regiao</th>'
+    + '<th>Composicao</th><th style="text-align:center">Saida</th><th>Frota</th>'
+    + '<th>Ocupacao</th><th>Prev. Fech.</th><th>Obs.</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table>'
     + '<div class="footer">'
     + '<span>Sistema de Programacao de Veiculos OPL - GRU - Tragetta Transportes</span>'
