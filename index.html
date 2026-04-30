@@ -355,12 +355,7 @@
     gap: 2px;
     min-width: 120px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    transition: all 0.15s;
   }
-  .stat-card.clickable { cursor: pointer; }
-  .stat-card.clickable:hover { border-color: #00B200; box-shadow: 0 2px 8px rgba(0,178,0,0.15); transform: translateY(-1px); }
-  .stat-card.clickable.active-filter { border-color: #00B200; background: rgba(0,178,0,0.05); box-shadow: 0 2px 8px rgba(0,178,0,0.2); }
-  .stat-card.clickable.active-filter .stat-label::after { content: ' ●'; color: #00B200; }
   .stat-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
   .stat-value { font-size: 20px; font-weight: 700; font-family: 'IBM Plex Mono', monospace; }
   .stat-value.blue { color: #00B200; }
@@ -554,7 +549,6 @@
     .header-sub { font-size: 10px; }
     .header-divider { display: none; }
     .header-clock { font-size: 11px; margin-left: 0; order: 10; width: 100%; }
-    .header-credit { display: none; }
 
     .nav { overflow-x: auto; padding: 0 10px; gap: 0; flex-wrap: nowrap; }
     .nav-btn { padding: 8px 12px; font-size: 11px; flex-shrink: 0; }
@@ -953,11 +947,7 @@
       font-family:'Poppins',sans-serif;line-height:1;
     ">0</span>
   </button>
-  <div class="header-credit" style="text-align:right;line-height:1.5">
-    <div style="font-size:11px;font-weight:600;color:#d1d5db">Produzido por: <span style="color:#00CC00">GRU — Tragetta Transportes</span></div>
-    <div style="font-size:10px;color:var(--text3)"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="d6a6b7a2a4bfb5bdf8a4b7bbb9a596b9a3a2bab9b9bdf8b5b9bbf8b4a4">[email&#160;protected]</a></div>
-    <div style="font-size:9px;color:#6b7280;font-style:italic">Sistemas · Planilhas · Dashboards · Aplicativos</div>
-  </div>
+
 </div>
 
 <div class="nav">
@@ -1541,7 +1531,11 @@
 
 <!-- TOAST -->
 
-<div id="tab-dashboard-content" class="tab-content"><div class="main" id="dashboard-main" style="padding:16px 20px;background:#f4f6fb;min-height:calc(100vh - 110px)"></div></div>
+<!-- ===================== TAB: DASHBOARD ===================== -->
+<div id="tab-dashboard-content" class="tab-content">
+  <div class="main" id="dashboard-main" style="padding:16px 20px;background:#f4f6fb;min-height:calc(100vh - 110px)">
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 <div id="sync-status" style="display:none;position:fixed;bottom:70px;right:24px;z-index:9000;background:#1a1a2e;color:#94a3b8;font-size:12px;font-family:Poppins,sans-serif;padding:8px 14px;border-radius:8px;border:1px solid #2d2d4e"></div>
@@ -1630,7 +1624,6 @@ let progData = [];
 let histData = []; // legacy - Programados tab now uses progData
 let sortKey = 'ocup';
 let sortDir = -1;
-let _filtroCard = null;
 let nextId = 3646;
 
 // ===== LOCAL STORAGE =====
@@ -1886,6 +1879,7 @@ function priorBadge(p) {
   if (p === 'Média') return '<span class="prior-media">🟡 Média</span>';
   return '<span class="prior-baixa">🟢 Baixa</span>';
 }
+// ===== AUTO-PRIORIDADE =====
 function calcPrioridade(r) {
   if (!r) return 'Média';
   if (r.tipo === 'Carro Extra' || r.tipo === 'Fora da Malha') return 'Baixa';
@@ -1903,9 +1897,13 @@ function ocupBar(v) {
   const color = ocupColorLegacy(v);
   const pct = Math.round(v * 100);
   var label, labelColor;
-  if (pct >= 100) { label = 'Finalizado'; labelColor = '#16a34a'; }
-  else if (pct > 1) { label = 'Carregando'; labelColor = '#ca8a04'; }
-  else { label = 'Vazio'; labelColor = '#9ca3af'; }
+  if (pct >= 100) {
+    label = 'Finalizado'; labelColor = '#16a34a';
+  } else if (pct > 1) {
+    label = 'Carregando'; labelColor = '#ca8a04';
+  } else {
+    label = 'Vazio'; labelColor = '#9ca3af';
+  }
   return `<div class="ocup-cell">
     <div class="ocup-bar-bg"><div class="ocup-bar-fill" style="width:${pct}%;background:${color}"></div></div>
     <span class="ocup-label" style="color:${labelColor};font-size:10px;font-weight:700;min-width:68px">${label}</span>
@@ -1954,13 +1952,12 @@ function showTab(tab) {
   }
   if (tab === 'grade') renderGrade();
 
-  if (tab === 'dashboard') {
+  if (tab === 'dashboard') { renderDashboard(); 
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
     document.getElementById('tab-dashboard-content')?.classList.add('active');
     document.getElementById('tab-dashboard')?.classList.add('active');
-    renderDashboard(); return;
-  }
+    return; }
   if (tab === 'plataforma') { const si = document.getElementById('plat-search'); if(si) si.value=''; const nb=document.getElementById('plat-no-result'); if(nb) nb.style.display='none';
     renderPlataforma();
     // Remove alert dot from tab
@@ -2076,12 +2073,6 @@ function buildProgRows() {
   });
 }
 
-function filtrarPorCard(tipo) {
-  _filtroCard = tipo;
-  renderProg();
-  const tbl = document.getElementById('table-prog');
-  if (tbl) tbl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
 function getFilteredProg() {
   const search = (document.getElementById('search-prog')?.value || '').toLowerCase();
   const tipo = document.getElementById('filter-tipo')?.value || '';
@@ -2094,9 +2085,6 @@ function getFilteredProg() {
       const s = (r.destino + r.frota + r.regiao + r.composicao).toLowerCase();
       if (!s.includes(search)) return false;
     }
-    if (_filtroCard === 'pendentes') return !r.frota && !r.ocupPct;
-    if (_filtroCard === 'preenchidos') return !!(r.frota || r.ocupPct);
-    if (_filtroCard === 'cheios') return r.ocupPct >= 100;
     return true;
   });
 }
@@ -2114,20 +2102,11 @@ function renderProg() {
   const preenchidos = data.filter(r => r.ocupPct > 0 || r.frota).length;
   const cheios = data.filter(r => r.ocupPct >= 100).length;
 
-  const _fCard = _filtroCard;
   document.getElementById('stats-prog').innerHTML = `
-    <div class="stat-card clickable ${_fCard === null ? 'active-filter' : ''}" onclick="filtrarPorCard(null)" title="Ver todas">
-      <span class="stat-label">Rotas Hoje</span><span class="stat-value blue">${total}</span>
-    </div>
-    <div class="stat-card clickable ${_fCard === 'preenchidos' ? 'active-filter' : ''}" onclick="filtrarPorCard('preenchidos')" title="Ver preenchidos">
-      <span class="stat-label">Preenchidos</span><span class="stat-value" style="color:var(--green)">${preenchidos}</span>
-    </div>
-    <div class="stat-card clickable ${_fCard === 'pendentes' ? 'active-filter' : ''}" onclick="filtrarPorCard('pendentes')" title="Ver pendentes">
-      <span class="stat-label">Pendentes</span><span class="stat-value orange">${total - preenchidos}</span>
-    </div>
-    <div class="stat-card clickable ${_fCard === 'cheios' ? 'active-filter' : ''}" onclick="filtrarPorCard('cheios')" title="Ver 100% cheios">
-      <span class="stat-label">100% Cheios</span><span class="stat-value green">${cheios}</span>
-    </div>
+    <div class="stat-card"><span class="stat-label">Rotas Hoje</span><span class="stat-value blue">${total}</span></div>
+    <div class="stat-card"><span class="stat-label">Preenchidos</span><span class="stat-value" style="color:var(--green)">${preenchidos}</span></div>
+    <div class="stat-card"><span class="stat-label">Pendentes</span><span class="stat-value orange">${total - preenchidos}</span></div>
+    <div class="stat-card"><span class="stat-label">100% Cheios</span><span class="stat-value green">${cheios}</span></div>
   `;
   setTimeout(applyDTInputs, 100);
   document.getElementById('badge-prog').textContent = total;
@@ -2198,6 +2177,7 @@ function updateOcupBar(rowId) {
   bar.style.background = color;
   input.style.color = color;
   input.style.borderColor = pct > 0 ? color + '88' : 'var(--border)';
+  // Atualizar status label
   const statusEl = document.getElementById('status_' + rowId);
   if (statusEl) {
     if (pct >= 100) { statusEl.textContent = 'Finalizado'; statusEl.style.color = '#16a34a'; }
@@ -2859,9 +2839,12 @@ function closeEditModal(e) {
 
 // ===== CLEAR FILTERS =====
 function clearFilters() {
+  // Clear only the search/filter fields
   var ids = ['search-prog', 'filter-tipo', 'filter-regiao', 'filter-dia'];
-  ids.forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
-  _filtroCard = null;
+  ids.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
   renderProg();
 }
 
@@ -2964,54 +2947,218 @@ function exportCSV(type) {
 
 
 
+// ===== HELPER PRIORIDADE ITEM =====
 function priorItem(label, count, total, color, bg) {
   var pct = total > 0 ? Math.round(count / total * 100) : 0;
   return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">' +
     '<span style="background:' + bg + ';color:' + color + ';border:1px solid ' + color + '55;border-radius:20px;padding:2px 8px;font-size:10px;font-weight:700;min-width:52px;text-align:center">' + label + '</span>' +
-    '<div style="flex:1;height:14px;background:#e5e7eb;border-radius:7px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + color + ';border-radius:7px;transition:width .5s"></div></div>' +
-    '<span style="font-size:12px;font-weight:700;color:' + color + ';min-width:26px;text-align:right">' + count + '</span></div>';
+    '<div style="flex:1;height:14px;background:#e5e7eb;border-radius:7px;overflow:hidden">' +
+      '<div style="height:100%;width:' + pct + '%;background:' + color + ';border-radius:7px;transition:width .5s"></div>' +
+    '</div>' +
+    '<span style="font-size:12px;font-weight:700;color:' + color + ';min-width:26px;text-align:right">' + count + '</span>' +
+  '</div>';
 }
+
+// ===== DASHBOARD =====
 function renderDashboard() {
-  var diaHoje = getDiaHoje(), dataHoje = getDataHoje();
+  var diaHoje = getDiaHoje();
+  var dataHoje = getDataHoje();
   var diasAbrev = {'Segunda-feira':'Seg','Terça-feira':'Ter','Quarta-feira':'Qua','Quinta-feira':'Qui','Sexta-feira':'Sex','Sábado':'Sáb','Domingo':'Dom'};
   var gradeHoje = gradeData.filter(function(r){ return r.dia === diaHoje; });
   var totalMalhas = gradeHoje.length;
-  var atendidas=0,cheias=0,emAndamento=0,pendentes=0,saiuNoPrazo=0;
-  var ocupacoes=[],byRegiao={},byHora={},altaP=0,mediaP=0,baixaP=0,vencidaP=0;
+  var atendidas=0, cheias=0, emAndamento=0, pendentes=0, saiuNoPrazo=0;
+  var ocupacoes=[], byRegiao={}, byHora={}, altaP=0, mediaP=0, baixaP=0;
+
   gradeHoje.forEach(function(g) {
-    var saved = progData.find(function(p){ return p.destino===g.destino&&p.saida===g.saida&&p.dia===g.dia; });
-    var pct = saved?Math.round((saved.ocup||0)*100):0, frota = saved?(saved.frota||')':'';
-    var reg = g.regiao||'Outras';
-    if (!byRegiao[reg]) byRegiao[reg]={total:0,atendida:0,cheia:0};
+    var saved = progData.find(function(p){ return p.destino===g.destino && p.saida===g.saida && p.dia===g.dia; });
+    var pct = saved ? Math.round((saved.ocup||0)*100) : 0;
+    var frota = saved ? (saved.frota||'') : '';
+    var reg = g.regiao || 'Outras';
+    if (!byRegiao[reg]) byRegiao[reg] = {total:0,atendida:0,cheia:0};
     byRegiao[reg].total++;
-    var hKey = ((h=parseInt((g.saida||'00:00').split(':')[0]))<10?'0':'')+h;
-    if (!byHora[hKey]) byHora[hKey]={total:0,atendida:0,cheia:0};
+    var hora = parseInt((g.saida||'00:00').split(':')[0], 10);
+    var hKey = (hora<10?'0':'')+hora;
+    if (!byHora[hKey]) byHora[hKey] = {total:0,atendida:0,cheia:0};
     byHora[hKey].total++;
-    var pr = calcPrioridade(saved||Object.assign({tipo:'Carro da Malha'},g));
-    if(pr==='Alta')altaP++;else if(pr==='Média')mediaP++;else if(pr==='Vencida')vencidaP++;else baixaP++;
-    if(frota||pct>0){atendidas++;byRegiao[reg].atendida++;byHora[hKey].atendida++;ocupacoes.push(pct);if(pct>=100){cheias++;byRegiao[reg].cheia++;byHora[hKey].cheia++;saiuNoPrazo++;}else emAndamento++;}
-    else pendentes++;
+    var pr = calcPrioridade(saved || Object.assign({tipo:'Carro da Malha'}, g));
+    if (pr==='Alta') altaP++; else if (pr==='Média') mediaP++; else baixaP++;
+    if (frota || pct > 0) {
+      atendidas++; byRegiao[reg].atendida++; byHora[hKey].atendida++;
+      ocupacoes.push(pct);
+      if (pct >= 100) { cheias++; byRegiao[reg].cheia++; byHora[hKey].cheia++; saiuNoPrazo++; }
+      else emAndamento++;
+    } else pendentes++;
   });
-  var pctAtend=totalMalhas>0?Math.round(atendidas/totalMalhas*100):0;
-  var pctCheias=totalMalhas>0?Math.round(cheias/totalMalhas*100):0;
-  var ocupMedia=ocupacoes.length>0?Math.round(ocupacoes.reduce(function(a,b){return a+b;},0)/ocupacoes.length):0;
-  function cPct(p){if(p>=100)return'#16a34a';if(p>=71)return'#65a30d';if(p>=51)return'#ca8a04';if(p>=31)return'#ea580c';if(p>0)return'#dc2626';return'#9ca3af';}
-  var regioes=Object.keys(byRegiao).sort(),maxR=Math.max.apply(null,regioes.map(function(r){return byRegiao[r].total;}))||1;
-  var regBars=regioes.map(function(reg){var d=byRegiao[reg],wC=Math.round(d.cheia/maxR*100),wA=Math.round(d.atendida/maxR*100);return'<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600;color:#374151">'+reg+'</span><span style="font-size:11px;color:#6b7280">'+d.atendida+'/'+d.total+' <span style="color:#16a34a;font-weight:700">✓ '+d.cheia+'</span></span></div><div style="position:relative;height:18px;background:#e5e7eb;border-radius:9px;overflow:hidden"><div style="position:absolute;left:0;height:100%;width:'+wA+'%;background:rgba(0,178,0,0.25);border-radius:9px"></div><div style="position:absolute;left:0;height:100%;width:'+wC+'%;background:#16a34a;border-radius:9px"></div></div></div>';}).join('');
-  var horasSorted=Object.keys(byHora).sort(),maxH=Math.max.apply(null,horasSorted.map(function(h){return byHora[h].total;}))||1;
-  var horasHtml=horasSorted.map(function(hora){var d=byHora[hora],bH=Math.max(20,Math.round(d.total/maxH*80)),hC=d.total>0?Math.round(d.cheia/d.total*100):0,hA=d.total>0?Math.round((d.atendida-d.cheia)/d.total*100):0,hP=100-hC-hA;return'<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;min-width:32px"><span style="font-size:9px;color:#6b7280;font-weight:600">'+d.atendida+'/'+d.total+'</span><div style="width:22px;height:'+bH+'px;border-radius:3px 3px 0 0;overflow:hidden;display:flex;flex-direction:column-reverse;border:1px solid #e5e7eb">'+(hP>0?'<div style="background:#fca5a5;flex:'+hP+'"></div>':'')+(hA>0?'<div style="background:#86efac;flex:'+hA+'"></div>':'')+(hC>0?'<div style="background:#16a34a;flex:'+hC+'"></div>':'')+'</div><span style="font-size:9px;color:#9ca3af;font-family:monospace">'+hora+'h</span></div>';}).join('');
-  var criticas=gradeHoje.filter(function(g){var s=progData.find(function(p){return p.destino===g.destino&&p.saida===g.saida&&p.dia===g.dia;});return calcPrioridade(s||Object.assign({tipo:'Carro da Malha'},g))==='Alta'&&!(s&&(s.frota||(s.ocup||0)>0));}).sort(function(a,b){return(a.saida||'').localeCompare(b.saida||'');}).slice(0,8);
-  var criticasHtml=criticas.length>0?criticas.map(function(r){var now=new Date(),p=(r.saida||'00:00').split(':'),dep=new Date();dep.setHours(parseInt(p[0]),parseInt(p[1]),0,0);if(dep<=now)dep.setDate(dep.getDate()+1);var diff=Math.round((dep-now)/60000),h=Math.floor(diff/60),m=diff%60;return'<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #fee2e2"><span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700">🔴 ALTA</span><span style="font-weight:700;color:#111;font-size:13px">'+r.destino+'</span><span style="font-family:monospace;color:#ef4444;font-weight:700">'+r.saida+'</span><span style="font-size:11px;color:#6b7280">'+r.regiao+'</span><span style="margin-left:auto;font-size:11px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:20px;font-weight:600">em '+(h>0?h+'h ':'')+m+'min</span></div>';}).join(''):'<div style="padding:20px;text-align:center;color:#9ca3af;font-size:12px">✅ Nenhuma malha crítica!</div>';
-  function kpi(lbl,val,color){return'<div style="border-left:3px solid '+color+';background:#fff;border:1px solid #e5e7eb;border-left:3px solid '+color+';border-radius:8px;padding:10px 14px;width:5.56cm;height:3.2cm;min-width:5.56cm;max-width:5.56cm;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;gap:4px;box-shadow:0 1px 3px rgba(0,0,0,.05)"><span style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em">'+lbl+'</span><span style="font-size:22px;font-weight:700;color:'+color+';font-family:IBM Plex Mono,monospace;line-height:1.1">'+val+'</span></div>';}
-  var main=document.getElementById('dashboard-main');if(!main)return;
-  main.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px"><div><div style="font-size:18px;font-weight:800;color:#111;font-family:Poppins,sans-serif">📊 Dashboard — Malhas GRU</div><div style="font-size:12px;color:#6b7280;margin-top:2px">'+(diasAbrev[diaHoje]||diaHoje)+' · '+dataHoje+' · '+totalMalhas+' malhas hoje</div></div><button onclick="renderDashboard()" class="btn btn-ghost btn-sm">↻ Atualizar</button></div>'+
-  '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:stretch">'+kpi('Total de Malhas',totalMalhas,'#00B200')+kpi('Atendidas',atendidas+' ('+pctAtend+'%)','#65a30d')+kpi('100% Cheias',cheias+' ('+pctCheias+'%)','#16a34a')+kpi('Pendentes',pendentes,'#ea580c')+kpi('Em Andamento',emAndamento,'#6366f1')+kpi('Ocup. Média',ocupMedia+'%',cPct(ocupMedia))+'</div>'+
-  '<div style="display:grid;grid-template-columns:200px 1fr 1fr;gap:12px;margin-bottom:16px">'+
-  '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)"><div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Taxa de Atendimento</div><div style="position:relative;width:120px;height:120px;margin:0 auto 10px"><svg viewBox="0 0 36 36" style="width:120px;height:120px;transform:rotate(-90deg)"><circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3.2"/><circle cx="18" cy="18" r="15.9" fill="none" stroke="#00B200" stroke-width="3.2" stroke-dasharray="'+pctAtend+' '+(100-pctAtend)+'" stroke-linecap="round"/></svg><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column"><span style="font-size:24px;font-weight:800;color:#111;font-family:monospace">'+pctAtend+'%</span><span style="font-size:9px;color:#9ca3af">atendidas</span></div></div><div style="font-size:10px;display:flex;justify-content:center;gap:8px;flex-wrap:wrap"><span style="color:#16a34a">■ '+cheias+' cheias</span><span style="color:#6366f1">■ '+emAndamento+' parcial</span><span style="color:#ea580c">■ '+pendentes+' pend.</span></div></div>'+
-  '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.05)"><div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Atendimento por Região</div>'+regBars+'</div>'+
-  '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.05)"><div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Malhas por Prioridade</div>'+priorItem('Alta',altaP,totalMalhas,'#dc2626','rgba(220,38,38,.1)')+priorItem('Média',mediaP,totalMalhas,'#ca8a04','rgba(202,138,4,.1)')+priorItem('Baixa',baixaP,totalMalhas,'#16a34a','rgba(22,163,74,.1)')+priorItem('Vencida',vencidaP,totalMalhas,'#7c3aed','rgba(124,58,237,.1)')+'<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"><div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:6px">Saíram no Horário</div><div style="font-size:28px;font-weight:800;color:#16a34a;text-align:center;font-family:monospace">'+saiuNoPrazo+'<span style="font-size:13px;color:#9ca3af;font-weight:400"> / '+totalMalhas+'</span></div><div style="background:#f0fdf4;border-radius:6px;padding:6px;margin-top:6px;font-size:11px;color:#15803d;text-align:center;font-weight:600">✅ '+Math.round(saiuNoPrazo/Math.max(totalMalhas,1)*100)+'% com carga 100%</div></div></div></div>'+
-  '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)"><div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:8px">Saídas por Horário</div><div style="font-size:10px;color:#9ca3af;margin-bottom:8px;display:flex;gap:12px"><span><span style="display:inline-block;width:10px;height:10px;background:#16a34a;border-radius:2px;margin-right:3px"></span>Finalizado</span><span><span style="display:inline-block;width:10px;height:10px;background:#86efac;border-radius:2px;margin-right:3px"></span>Carregando</span><span><span style="display:inline-block;width:10px;height:10px;background:#fca5a5;border-radius:2px;margin-right:3px"></span>Vazio</span></div><div style="display:flex;align-items:flex-end;gap:6px;height:120px;overflow-x:auto;padding-bottom:2px">'+horasHtml+'</div></div>'+
-  '<div style="background:#fff;border:1.5px solid rgba(239,68,68,.3);border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05)"><div style="background:rgba(239,68,68,.06);padding:10px 14px;border-bottom:1px solid rgba(239,68,68,.15);display:flex;align-items:center;gap:8px"><span>🚨</span><span style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase">Malhas Críticas — Alta prioridade sem atendimento</span><span style="background:#ef4444;color:#fff;border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-left:auto">'+criticas.length+'</span></div>'+criticasHtml+'</div>';
+
+  var pctAtend = totalMalhas>0 ? Math.round(atendidas/totalMalhas*100) : 0;
+  var pctCheias = totalMalhas>0 ? Math.round(cheias/totalMalhas*100) : 0;
+  var ocupMedia = ocupacoes.length>0 ? Math.round(ocupacoes.reduce(function(a,b){return a+b;},0)/ocupacoes.length) : 0;
+
+  function cPct(p) {
+    if(p>=100)return'#16a34a';if(p>=71)return'#65a30d';
+    if(p>=51)return'#ca8a04';if(p>=31)return'#ea580c';
+    if(p>0)return'#dc2626';return'#9ca3af';
+  }
+
+  var regioes = Object.keys(byRegiao).sort();
+  var maxR = Math.max.apply(null, regioes.map(function(r){return byRegiao[r].total;})) || 1;
+  var regBars = regioes.map(function(reg) {
+    var d=byRegiao[reg];
+    var wC=Math.round(d.cheia/maxR*100), wA=Math.round(d.atendida/maxR*100);
+    return '<div style="margin-bottom:12px">' +
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
+        '<span style="font-size:12px;font-weight:600;color:#374151">'+reg+'</span>' +
+        '<span style="font-size:11px;color:#6b7280">'+d.atendida+'/'+d.total+' <span style="color:#16a34a;font-weight:700">✓ '+d.cheia+'</span></span>' +
+      '</div>' +
+      '<div style="position:relative;height:18px;background:#e5e7eb;border-radius:9px;overflow:hidden">' +
+        '<div style="position:absolute;left:0;height:100%;width:'+wA+'%;background:rgba(0,178,0,0.25);border-radius:9px"></div>' +
+        '<div style="position:absolute;left:0;height:100%;width:'+wC+'%;background:#16a34a;border-radius:9px"></div>' +
+      '</div></div>';
+  }).join('');
+
+  var horasSorted = Object.keys(byHora).sort();
+  var maxH = Math.max.apply(null, horasSorted.map(function(h){return byHora[h].total;})) || 1;
+  var horasHtml = horasSorted.map(function(hora) {
+    var d=byHora[hora];
+    var bH=Math.max(20,Math.round(d.total/maxH*80));
+    var hC=d.total>0?Math.round(d.cheia/d.total*100):0;
+    var hA=d.total>0?Math.round((d.atendida-d.cheia)/d.total*100):0;
+    var hP=100-hC-hA;
+    return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;min-width:32px">' +
+      '<span style="font-size:9px;color:#6b7280;font-weight:600">'+d.atendida+'/'+d.total+'</span>' +
+      '<div style="width:22px;height:'+bH+'px;border-radius:3px 3px 0 0;overflow:hidden;display:flex;flex-direction:column-reverse;border:1px solid #e5e7eb">' +
+        (hP>0?'<div style="background:#fca5a5;flex:'+hP+'"></div>':'') +
+        (hA>0?'<div style="background:#86efac;flex:'+hA+'"></div>':'') +
+        (hC>0?'<div style="background:#16a34a;flex:'+hC+'"></div>':'') +
+      '</div>' +
+      '<span style="font-size:9px;color:#9ca3af;font-family:monospace">'+hora+'h</span>' +
+    '</div>';
+  }).join('');
+
+  var criticas = gradeHoje.filter(function(g) {
+    var s = progData.find(function(p){ return p.destino===g.destino&&p.saida===g.saida&&p.dia===g.dia; });
+    return calcPrioridade(s||Object.assign({tipo:'Carro da Malha'},g))==='Alta' && !(s&&(s.frota||(s.ocup||0)>0));
+  }).sort(function(a,b){ return (a.saida||'').localeCompare(b.saida||''); }).slice(0,8);
+
+  var criticasHtml = criticas.length>0 ? criticas.map(function(r) {
+    var now=new Date(), p=(r.saida||'00:00').split(':');
+    var dep=new Date(); dep.setHours(parseInt(p[0]),parseInt(p[1]),0,0);
+    if(dep<=now) dep.setDate(dep.getDate()+1);
+    var diff=Math.round((dep-now)/60000);
+    var h=Math.floor(diff/60),m=diff%60;
+    return '<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid #fee2e2;font-family:Poppins,sans-serif">' +
+      '<span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700">🔴 ALTA</span>' +
+      '<span style="font-weight:700;color:#111;font-size:13px">'+r.destino+'</span>' +
+      '<span style="font-family:monospace;color:#ef4444;font-weight:700">'+r.saida+'</span>' +
+      '<span style="font-size:11px;color:#6b7280">'+r.regiao+'</span>' +
+      '<span style="margin-left:auto;font-size:11px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:20px;font-weight:600">em '+(h>0?h+'h ':'')+m+'min</span>' +
+    '</div>';
+  }).join('') : '<div style="padding:20px;text-align:center;color:#9ca3af;font-size:12px">✅ Nenhuma malha crítica — bom trabalho!</div>';
+
+  function kpi(lbl,val,color) {
+    return '<div style="'+
+      'border-left:3px solid '+color+';'+
+      'background:#fff;'+
+      'border:1px solid #e5e7eb;'+
+      'border-left:3px solid '+color+';'+
+      'border-radius:8px;'+
+      'padding:10px 14px;'+
+      'width:5.56cm;'+
+      'height:3.2cm;'+
+      'min-width:5.56cm;'+
+      'max-width:5.56cm;'+
+      'box-sizing:border-box;'+
+      'display:flex;'+
+      'flex-direction:column;'+
+      'justify-content:center;'+
+      'gap:4px;'+
+      'box-shadow:0 1px 3px rgba(0,0,0,.05);'+
+      '">' +
+      '<span style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em">'+lbl+'</span>' +
+      '<span style="font-size:22px;font-weight:700;color:'+color+';font-family:IBM Plex Mono,monospace;line-height:1.1">'+val+'</span>' +
+    '</div>';
+  }
+
+  var main = document.getElementById('dashboard-main');
+  if (!main) return;
+
+  main.innerHTML =
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">' +
+      '<div><div style="font-size:18px;font-weight:800;color:#111;font-family:Poppins,sans-serif">📊 Dashboard — Malhas GRU</div>' +
+      '<div style="font-size:12px;color:#6b7280;margin-top:2px">'+(diasAbrev[diaHoje]||diaHoje)+' · '+dataHoje+' · '+totalMalhas+' malhas hoje</div></div>' +
+      '<button onclick="renderDashboard()" class="btn btn-ghost btn-sm">↻ Atualizar</button>' +
+    '</div>' +
+
+    '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:stretch">' +
+      kpi('Total de Malhas', totalMalhas, '#00B200') +
+      kpi('Atendidas', atendidas+' ('+pctAtend+'%)', '#65a30d') +
+      kpi('100% Cheias', cheias+' ('+pctCheias+'%)', '#16a34a') +
+      kpi('Pendentes', pendentes, '#ea580c') +
+      kpi('Em Andamento', emAndamento, '#6366f1') +
+      kpi('Ocup. Média', ocupMedia+'%', cPct(ocupMedia)) +
+    '</div>' +
+
+    '<div style="display:grid;grid-template-columns:200px 1fr 1fr;gap:12px;margin-bottom:16px">' +
+
+      '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.05)">' +
+        '<div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Taxa de Atendimento</div>' +
+        '<div style="position:relative;width:120px;height:120px;margin:0 auto 10px">' +
+          '<svg viewBox="0 0 36 36" style="width:120px;height:120px;transform:rotate(-90deg)">' +
+            '<circle cx="18" cy="18" r="15.9" fill="none" stroke="#e5e7eb" stroke-width="3.2"/>' +
+            '<circle cx="18" cy="18" r="15.9" fill="none" stroke="#00B200" stroke-width="3.2" stroke-dasharray="'+pctAtend+' '+(100-pctAtend)+'" stroke-linecap="round"/>' +
+          '</svg>' +
+          '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column">' +
+            '<span style="font-size:24px;font-weight:800;color:#111;font-family:monospace">'+pctAtend+'%</span>' +
+            '<span style="font-size:9px;color:#9ca3af">atendidas</span>' +
+          '</div>' +
+        '</div>' +
+        '<div style="font-size:10px;display:flex;justify-content:center;gap:8px;flex-wrap:wrap">' +
+          '<span style="color:#16a34a">■ '+cheias+' cheias</span>' +
+          '<span style="color:#6366f1">■ '+emAndamento+' parcial</span>' +
+          '<span style="color:#ea580c">■ '+pendentes+' pend.</span>' +
+        '</div>' +
+      '</div>' +
+
+      '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.05)">' +
+        '<div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Atendimento por Região</div>' +
+        regBars +
+      '</div>' +
+
+      '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.05)">' +
+        '<div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">Malhas por Prioridade</div>' +
+        priorItem('Alta',altaP,totalMalhas,'#dc2626','rgba(220,38,38,.1)') +
+        priorItem('Média',mediaP,totalMalhas,'#ca8a04','rgba(202,138,4,.1)') +
+        priorItem('Baixa',baixaP,totalMalhas,'#16a34a','rgba(22,163,74,.1)') +
+        '<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">' +
+          '<div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:6px">Saíram no Horário</div>' +
+          '<div style="font-size:28px;font-weight:800;color:#16a34a;text-align:center;font-family:monospace">'+saiuNoPrazo+'<span style="font-size:13px;color:#9ca3af;font-weight:400"> / '+totalMalhas+'</span></div>' +
+          '<div style="background:#f0fdf4;border-radius:6px;padding:6px;margin-top:6px;font-size:11px;color:#15803d;text-align:center;font-weight:600">'+
+            '✅ '+Math.round(saiuNoPrazo/Math.max(totalMalhas,1)*100)+'% com carga 100%' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)">' +
+      '<div style="font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Saídas por Horário</div>' +
+      '<div style="font-size:10px;color:#9ca3af;margin-bottom:8px;display:flex;gap:12px">' +
+        '<span><span style="display:inline-block;width:10px;height:10px;background:#16a34a;border-radius:2px;margin-right:3px"></span>100% cheios</span>' +
+        '<span><span style="display:inline-block;width:10px;height:10px;background:#86efac;border-radius:2px;margin-right:3px"></span>Em andamento</span>' +
+        '<span><span style="display:inline-block;width:10px;height:10px;background:#fca5a5;border-radius:2px;margin-right:3px"></span>Pendentes</span>' +
+      '</div>' +
+      '<div style="display:flex;align-items:flex-end;gap:6px;height:120px;overflow-x:auto;padding-bottom:2px">' +
+        horasHtml +
+      '</div>' +
+    '</div>' +
+
+    '<div style="background:#fff;border:1.5px solid rgba(239,68,68,.3);border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.05)">' +
+      '<div style="background:rgba(239,68,68,.06);padding:10px 14px;border-bottom:1px solid rgba(239,68,68,.15);display:flex;align-items:center;gap:8px">' +
+        '<span>🚨</span>' +
+        '<span style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.05em">Malhas Críticas — Alta prioridade sem atendimento</span>' +
+        '<span style="background:#ef4444;color:#fff;border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-left:auto">'+criticas.length+'</span>' +
+      '</div>' +
+      criticasHtml +
+    '</div>';
 }
 
 // ===== INIT =====
@@ -3119,7 +3266,6 @@ function buildEmailBody(programados) {
 
   let lines = [];
   lines.push('Programação de Veículos — GRU | ' + dia + ', ' + hoje);
-  lines.push('Emitido por: GRU — Tragetta Transportes');
   lines.push('='.repeat(60));
   lines.push('');
   lines.push('RESUMO:');
@@ -4586,12 +4732,16 @@ function imprimirProgramados() {
     return true;
   });
 
-  var hoje = getDataHoje(); var diaHoje = getDiaHoje();
+  var hoje = getDataHoje();
+  var diaHoje = getDiaHoje();
   data.sort(function(a, b) {
-    var pa = a.prev_fech||'', pb = b.prev_fech||'';
-    if (pa&&!pb) return -1; if (!pa&&pb) return 1;
-    if (pa&&pb) { function pd(s){var m=String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/);return m?new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1])):null;} var da=pd(pa),db=pd(pb); if(da&&db&&da-db!==0)return da-db; }
-    return (a.saida||'').localeCompare(b.saida||'');
+    var pa = a.prev_fech || '', pb = b.prev_fech || '';
+    if (pa && !pb) return -1; if (!pa && pb) return 1;
+    if (pa && pb) {
+      function pd(s) { var m = String(s).match(/^(\d{2})\/(\d{2})\/(\d{4})/); if (m) return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1])); return null; }
+      var da = pd(pa), db = pd(pb); if (da && db && da - db !== 0) return da - db;
+    }
+    return (a.saida || '').localeCompare(b.saida || '');
   });
 
   if (!data.length) {
@@ -4671,7 +4821,7 @@ function imprimirProgramados() {
     + '</tr></thead><tbody>' + rows + '</tbody></table>'
     + '<div class="footer">'
     + '<span>Sistema de Programacao de Veiculos OPL - GRU - Tragetta Transportes</span>'
-    + '<span>GRU — Tragetta Transportes - </span>'
+    + '<span>GRU — Tragetta Transportes</span>'
     + '</div></body></html>';
 
   win.document.write(printHTML);
@@ -4895,7 +5045,23 @@ if (APPS_SCRIPT_URL) {
 // ============================================================
 // WHATSAPP FLOATING BUTTON
 // ============================================================
-
+function abrirWAModal() {
+  var modal = document.getElementById('wa-modal');
+  if (modal) modal.style.display = 'flex';
+}
+function fecharWAModal() {
+  var modal = document.getElementById('wa-modal');
+  if (modal) modal.style.display = 'none';
+}
+function abrirWA(numero, nome) {
+  var msg = encodeURIComponent('Ola ' + nome + ', preciso de informacoes sobre a Programacao de Veiculos OPL GRU.');
+  window.open('https:/' + '/wa.me/' + numero + '?text=' + msg, '_blank');
+  fecharWAModal();
+}
+document.addEventListener('click', function(e) {
+  var modal = document.getElementById('wa-modal');
+  if (modal && e.target === modal) fecharWAModal();
+});
 
 
 function autoFormatDT(input, isDatetime) {
@@ -4957,7 +5123,115 @@ function filtroSemana() {
 
 </script>
 <!-- ============================================================ -->
+<!-- WHATSAPP FLOATING BUTTON + SHIFT SELECTOR MODAL              -->
+<!-- ============================================================ -->
+<button id="wa-fab" onclick="abrirWAModal()" title="Contato via WhatsApp"
+  style="
+    position:fixed;bottom:28px;right:24px;z-index:8000;
+    width:58px;height:58px;border-radius:50%;border:none;
+    background:#25D366;color:#fff;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 4px 16px rgba(37,211,102,.5);
+    transition:transform .2s,box-shadow .2s;
+  "
+  onmouseover="this.style.transform='scale(1.1)';this.style.boxShadow='0 6px 24px rgba(37,211,102,.7)'"
+  onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 4px 16px rgba(37,211,102,.5)'"
+>
+  <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+  </svg>
+</button>
 
+<!-- SHIFT SELECTOR MODAL -->
+<div id="wa-modal" style="
+  display:none;position:fixed;inset:0;z-index:8001;
+  background:rgba(0,0,0,.65);backdrop-filter:blur(6px);
+  align-items:center;justify-content:center;
+  font-family:'Poppins',sans-serif;
+">
+  <div style="
+    background:#fff;border-radius:20px;padding:28px 24px;
+    width:100%;max-width:380px;margin:16px;
+    box-shadow:0 24px 64px rgba(0,0,0,.3);
+    animation:waModalIn .3s cubic-bezier(.34,1.56,.64,1);
+  ">
+    <style>@keyframes waModalIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}</style>
+
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="width:56px;height:56px;background:#25D366;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 10px">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="white">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+        </svg>
+      </div>
+      <div style="font-size:17px;font-weight:700;color:#111">Contato via WhatsApp</div>
+      <div style="font-size:12px;color:#6b7280;margin-top:4px">Selecione o turno para falar com o responsável</div>
+    </div>
+
+    <!-- Shift buttons -->
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+
+      <!-- 1º Turno -->
+      <div style="border:1.5px solid #e5e7eb;border-radius:12px;overflow:hidden">
+        <div style="background:#f9fafb;padding:10px 14px;font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #e5e7eb">
+          ☀️ 1º Turno
+        </div>
+        <div style="display:flex;gap:8px;padding:10px">
+          <button onclick="abrirWA('5511951500192','Adilson')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
+            📞 Adilson
+          </button>
+          <button onclick="abrirWA('5511973449341','Denis Lopes')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
+            📞 Denis Lopes
+          </button>
+          <button onclick="abrirWA('5511946755969','Wellington')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
+            📞 Wellington
+          </button>
+        </div>
+      </div>
+
+      <!-- 2º Turno -->
+      <div style="border:1.5px solid #e5e7eb;border-radius:12px;overflow:hidden">
+        <div style="background:#f9fafb;padding:10px 14px;font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #e5e7eb">
+          🌙 2º Turno
+        </div>
+        <div style="display:flex;gap:8px;padding:10px">
+          <button onclick="abrirWA('5511979538547','Julio Matos')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
+            📞 Julio Matos
+          </button>
+          <button onclick="abrirWA('5511973057501','Elenaldo Santana')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
+            📞 Elenaldo
+          </button>
+          <button onclick="abrirWA('5511972400780','Edmilson Neves')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
+            📞 Edmilson Neves
+          </button>
+        </div>
+      </div>
+
+      <!-- 3º Turno -->
+      <div style="border:1.5px solid #e5e7eb;border-radius:12px;overflow:hidden">
+        <div style="background:#f9fafb;padding:10px 14px;font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #e5e7eb">
+          🌃 3º Turno
+        </div>
+        <div style="display:flex;gap:8px;padding:10px">
+          <button onclick="abrirWA('5511951350073','Walisson Silva')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
+            📞 Walisson Silva
+          </button>
+          <button onclick="abrirWA('5511981295248','Rogerio Moimo')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
+            📞 Rogerio Moimo
+          </button>
+          <button onclick="abrirWA('5511954309243','Jayme Cabral')" style="flex:1;padding:10px 8px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif;transition:filter .15s" onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
+            📞 Jayme Cabral
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <button onclick="fecharWAModal()" style="width:100%;padding:12px;background:#f3f4f6;color:#374151;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Poppins',sans-serif">
+      Cancelar
+    </button>
+  </div>
+</div>
 
 
 </body>
