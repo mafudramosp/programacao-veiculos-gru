@@ -3045,9 +3045,26 @@ function renderDashboard() {
   }).join('') : '<div style="padding:20px;text-align:center;color:#9ca3af;font-size:12px">✅ Nenhuma malha crítica — bom trabalho!</div>';
 
   function kpi(lbl,val,color) {
-    return '<div class="stat-card" style="border-left:3px solid '+color+';min-width:100px">' +
-      '<span class="stat-label">'+lbl+'</span>' +
-      '<span class="stat-value" style="color:'+color+';font-size:18px">'+val+'</span>' +
+    return '<div style="'+
+      'border-left:3px solid '+color+';'+
+      'background:#fff;'+
+      'border:1px solid #e5e7eb;'+
+      'border-left:3px solid '+color+';'+
+      'border-radius:8px;'+
+      'padding:10px 14px;'+
+      'width:5.56cm;'+
+      'height:3.2cm;'+
+      'min-width:5.56cm;'+
+      'max-width:5.56cm;'+
+      'box-sizing:border-box;'+
+      'display:flex;'+
+      'flex-direction:column;'+
+      'justify-content:center;'+
+      'gap:4px;'+
+      'box-shadow:0 1px 3px rgba(0,0,0,.05);'+
+      '">' +
+      '<span style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em">'+lbl+'</span>' +
+      '<span style="font-size:22px;font-weight:700;color:'+color+';font-family:IBM Plex Mono,monospace;line-height:1.1">'+val+'</span>' +
     '</div>';
   }
 
@@ -3061,7 +3078,7 @@ function renderDashboard() {
       '<button onclick="renderDashboard()" class="btn btn-ghost btn-sm">↻ Atualizar</button>' +
     '</div>' +
 
-    '<div class="stats-row" style="margin-bottom:16px;flex-wrap:wrap">' +
+    '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;align-items:stretch">' +
       kpi('Total de Malhas', totalMalhas, '#00B200') +
       kpi('Atendidas', atendidas+' ('+pctAtend+'%)', '#65a30d') +
       kpi('100% Cheias', cheias+' ('+pctCheias+'%)', '#16a34a') +
@@ -4705,7 +4722,8 @@ function imprimirProgramados() {
     return true;
   });
 
-  // Mesma ordenação da aba Programados: prev_fech primeiro, depois saida
+  var hoje = getDataHoje();
+  var diaHoje = getDiaHoje();
   data.sort(function(a, b) {
     var pa = a.prev_fech || '', pb = b.prev_fech || '';
     if (pa && !pb) return -1;
@@ -4754,8 +4772,6 @@ function imprimirProgramados() {
       + '</tr>';
   }).join('');
 
-  var hoje = getDataHoje();
-  var diaHoje = getDiaHoje();
   var printTime = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
   var css = [
     '* { box-sizing: border-box; margin: 0; padding: 0; }',
