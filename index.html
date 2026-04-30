@@ -1884,11 +1884,9 @@ function priorBadge(p) {
   if (p === 'Média') return '<span class="prior-media">🟡 Média</span>';
   return '<span class="prior-baixa">🟢 Baixa</span>';
 }
-
 // ===== AUTO-PRIORIDADE =====
 function calcPrioridade(r) {
   if (!r) return 'Média';
-  // Extra ou Fora da Malha → sempre Baixa
   if (r.tipo === 'Carro Extra' || r.tipo === 'Fora da Malha') return 'Baixa';
   if (!r.saida) return 'Média';
   var now = new Date();
@@ -4744,6 +4742,8 @@ function imprimirProgramados() {
       + '</tr>';
   }).join('');
 
+  var hoje = getDataHoje();
+  var diaHoje = getDiaHoje();
   var printTime = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
   var css = [
     '* { box-sizing: border-box; margin: 0; padding: 0; }',
