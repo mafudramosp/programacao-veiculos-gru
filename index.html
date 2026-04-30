@@ -1879,22 +1879,27 @@ function regiaoBadge(r) {
 }
 function priorBadge(p) {
   if (!p) return '';
+  if (p === 'Vencida') return '<span style="color:#7c3aed;font-size:11px;font-weight:600">⏰ Vencida</span>';
   if (p === 'Alta') return '<span class="prior-alta">🔴 Alta</span>';
   if (p === 'Média') return '<span class="prior-media">🟡 Média</span>';
   return '<span class="prior-baixa">🟢 Baixa</span>';
 }
+
 // ===== AUTO-PRIORIDADE =====
 function calcPrioridade(r) {
   if (!r) return 'Média';
+  // Extra ou Fora da Malha → sempre Baixa
   if (r.tipo === 'Carro Extra' || r.tipo === 'Fora da Malha') return 'Baixa';
   if (!r.saida) return 'Média';
   var now = new Date();
   var parts = (r.saida || '00:00').split(':');
   var departure = new Date();
   departure.setHours(parseInt(parts[0]) || 0, parseInt(parts[1]) || 0, 0, 0);
-  if (departure <= now) departure.setDate(departure.getDate() + 1);
+  // Se já passou hoje → Vencida
+  if (departure < now) return 'Vencida';
   var diffH = (departure - now) / 3600000;
-  return diffH < 7 ? 'Alta' : 'Média';
+  if (diffH < 7) return 'Alta';
+  return 'Média';
 }
 function ocupBar(v) {
   const color = ocupColorLegacy(v);
